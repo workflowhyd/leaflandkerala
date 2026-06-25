@@ -1,0 +1,360 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  EMPLOYEE
+}
+
+enum CustomerStatus {
+  LEAD
+  VISITED
+  INTERESTED
+  FOLLOW_UP
+  ORDER_PLACED
+  ACTIVE
+}
+
+enum OrderStatus {
+  NEW
+  CONFIRMED
+  PROCESSING
+  PACKED
+  OUT_FOR_DELIVERY
+  DELIVERED
+  CANCELLED
+}
+
+enum ProductCategory {
+  SEEDS
+  FERTILIZERS
+  PESTICIDES
+  ORGANIC_PRODUCTS
+  FARMING_TOOLS
+  IRRIGATION_SUPPLIES
+  AGRICULTURAL_EQUIPMENT
+}
+
+enum DocumentType {
+  AADHAAR
+  PAN
+  DRIVING_LICENSE
+  VOTER_ID
+}
+
+enum ActivityType {
+  LOGIN
+  LOGOUT
+  CUSTOMER_REGISTER
+  CUSTOMER_VISIT
+  PHOTO_UPLOAD
+  ORDER_CREATE
+  ORDER_STATUS_CHANGE
+  EMPLOYEE_CREATE
+  PRODUCT_CREATE
+  PRODUCT_UPDATE
+}
+
+model User {
+  id             String    @id @default(cuid())
+  name           String
+  email          String    @unique
+  password       String
+  role           Role      @default(EMPLOYEE)
+  isActive       Boolean   @default(true)
+  resetToken     String?
+  resetTokenExp  DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  employee       Employee?
+  activityLogs   ActivityLog[]
+  sessions       Session[]
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Employee {
+  id                String   @id @default(cuid())
+  userId            String   @unique
+  name              String
+  mobile            String
+  email             String
+  address           String?
+  commissionPercent Float    @default(10.0)
+  territory         String?
+  isActive          Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user              User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  documents         EmployeeDocument[]
+  pincodes          EmployeePincode[]
+  customers         Customer[]
+  fieldVisits       FieldVisit[]
+  orders            Order[]
+  commissions       Commission[]
+}
+
+model EmployeeDocument {
+  id           String       @id @default(cuid())
+  employeeId   String
+  documentType DocumentType
+  imageUrl     String
+  publicId     String?
+  createdAt    DateTime     @default(now())
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+}
+
+model EmployeePincode {
+  id         String   @id @default(cuid())
+  employeeId String
+  pincodeId  String
+  assignedAt DateTime @default(now())
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  pincode  Pincode  @relation(fields: [pincodeId], references: [id], onDelete: Cascade)
+
+  @@unique([employeeId, pincodeId])
+}
+
+model Pincode {
+  id        String   @id @default(cuid())
+  code      String   @unique
+  area      String?
+  district  String?
+  state     String   @default("Telangana")
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  employees EmployeePincode[]
+  customers Customer[]
+  orders    Order[]
+}
+
+model Customer {
+  id                String         @id @default(cuid())
+  employeeId        String
+  name              String
+  mobile            String
+  alternateMobile   String?
+  address           String
+  village           String?
+  district          String
+  state             String         @default("Telangana")
+  pincode           String
+  pincodeId         String?
+  landmark          String?
+  interestedProduct String?
+  notes             String?
+  status            CustomerStatus @default(LEAD)
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  employee     Employee          @relation(fields: [employeeId], references: [id])
+  pincodeRef   Pincode?          @relation(fields: [pincodeId], references: [id])
+  photos       CustomerPhoto[]
+  location     CustomerLocation?
+  fieldVisits  FieldVisit[]
+  orders       Order[]
+  activityLogs ActivityLog[]
+}
+
+model CustomerPhoto {
+  id         String   @id @default(cuid())
+  customerId String
+  imageUrl   String
+  publicId   String?
+  isFront    Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+}
+
+model CustomerLocation {
+  id         String   @id @default(cuid())
+  customerId String   @unique
+  latitude   Float
+  longitude  Float
+  capturedAt DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+}
+
+model FieldVisit {
+  id         String   @id @default(cuid())
+  employeeId String
+  customerId String
+  visitDate  DateTime
+  notes      String?
+  latitude   Float?
+  longitude  Float?
+  createdAt  DateTime @default(now())
+
+  employee Employee @relation(fields: [employeeId], references: [id])
+  customer Customer @relation(fields: [customerId], references: [id])
+}
+
+model Product {
+  id            String          @id @default(cuid())
+  name          String
+  category      ProductCategory
+  description   String?
+  price         Float
+  salePrice     Float?
+  sku           String          @unique
+  stock         Int             @default(0)
+  imageUrl      String?
+  imagePublicId String?
+  isActive      Boolean         @default(true)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  orderItems OrderItem[]
+}
+
+model Order {
+  id           String      @id @default(cuid())
+  orderNumber  String      @unique
+  customerId   String
+  employeeId   String
+  status       OrderStatus @default(NEW)
+  totalAmount  Float
+  notes        String?
+  deliveryDate DateTime?
+  pincodeId    String?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  customer      Customer       @relation(fields: [customerId], references: [id])
+  employee      Employee       @relation(fields: [employeeId], references: [id])
+  pincodeRef    Pincode?       @relation(fields: [pincodeId], references: [id])
+  items         OrderItem[]
+  tracking      OrderTracking[]
+  notifications Notification[]
+  commissions   Commission[]
+}
+
+model OrderItem {
+  id        String  @id @default(cuid())
+  orderId   String
+  productId String
+  quantity  Int
+  price     Float
+  subtotal  Float
+
+  order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id])
+}
+
+model OrderTracking {
+  id        String      @id @default(cuid())
+  orderId   String
+  status    OrderStatus
+  notes     String?
+  createdAt DateTime    @default(now())
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+}
+
+model Notification {
+  id        String    @id @default(cuid())
+  orderId   String?
+  type      String
+  recipient String
+  message   String
+  isSent    Boolean   @default(false)
+  sentAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  order Order? @relation(fields: [orderId], references: [id], onDelete: SetNull)
+}
+
+model DeliverySchedule {
+  id             String    @id @default(cuid())
+  orderId        String
+  scheduledDate  DateTime
+  reminderSent   Boolean   @default(false)
+  reminderSentAt DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}
+
+model CommissionSetting {
+  id                String   @id @default(cuid())
+  defaultPercentage Float    @default(10.0)
+  minPercentage     Float    @default(5.0)
+  maxPercentage     Float    @default(15.0)
+  updatedAt         DateTime @updatedAt
+}
+
+model Commission {
+  id         String    @id @default(cuid())
+  employeeId String
+  orderId    String
+  amount     Float
+  percentage Float
+  isPaid     Boolean   @default(false)
+  paidAt     DateTime?
+  createdAt  DateTime  @default(now())
+
+  employee Employee @relation(fields: [employeeId], references: [id])
+  order    Order    @relation(fields: [orderId], references: [id])
+}
+
+model ActivityLog {
+  id          String       @id @default(cuid())
+  userId      String?
+  customerId  String?
+  type        ActivityType
+  description String
+  metadata    Json?
+  createdAt   DateTime     @default(now())
+
+  user     User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  customer Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+}
+
+model WhatsAppSetting {
+  id                  String   @id @default(cuid())
+  isEnabled           Boolean  @default(false)
+  apiKey              String?
+  phoneNumberId       String?
+  templateOrderPlaced String   @default("Your order has been received.")
+  templateConfirmed   String   @default("Your order has been confirmed.")
+  templateProcessing  String   @default("Your order is being processed.")
+  templateDispatched  String   @default("Your order has been dispatched.")
+  templateDelivery    String   @default("Your order is out for delivery.")
+  templateDelivered   String   @default("Your order has been delivered successfully.")
+  templateReminder    String   @default("Dear Customer, your order is scheduled for delivery tomorrow. Please ensure someone is available to receive it.")
+  updatedAt           DateTime @updatedAt
+}
+
+model CompanyInfo {
+  id            String   @id @default(cuid())
+  businessName  String   @default("LeafLand Kerala")
+  contactNumber String?
+  email         String?
+  gstNumber     String?
+  address       String?
+  logoUrl       String?
+  logoPublicId  String?
+  updatedAt     DateTime @updatedAt
+}
