@@ -295,35 +295,39 @@ export default function ReportsPage() {
     : "0";
 
   return (
-    <div className="flex flex-col gap-6 p-6">
-      <div className="flex items-center justify-between">
+    <div className="flex flex-col gap-4 lg:gap-6">
+      <div className="flex items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-[#1a1a1a]">Reports</h1>
+          <h1 className="text-xl font-bold text-[#1a1a1a] lg:text-2xl">Reports</h1>
           <p className="text-sm text-[#64748b] mt-0.5">Analytics and business insights</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-shrink-0">
           <Button variant="outline" size="sm" onClick={exportPDF}>
             <FileText className="h-4 w-4" />
-            Export PDF
+            <span className="hidden sm:inline">PDF</span>
           </Button>
           <Button variant="outline" size="sm" onClick={exportExcel}>
             <Download className="h-4 w-4" />
-            Export Excel
+            <span className="hidden sm:inline">Excel</span>
           </Button>
         </div>
       </div>
 
-      <div className="flex items-center gap-1 rounded-lg border border-[#e2e8f0] bg-white p-1 w-fit flex-wrap">
-        {TABS.map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            className={`flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors ${activeTab === tab.id ? "bg-[#1E4D3D] text-white" : "text-[#64748b] hover:text-[#1a1a1a] hover:bg-[#f8f9fa]"}`}
-          >
-            <tab.icon className="h-4 w-4" />
-            {tab.label}
-          </button>
-        ))}
+      {/* Tabs — horizontally scrollable on mobile */}
+      <div className="overflow-x-auto pb-1 -mx-4 px-4 lg:mx-0 lg:px-0">
+        <div className="flex items-center gap-1 rounded-lg border border-[#e2e8f0] bg-white p-1 w-fit min-w-full sm:min-w-0">
+          {TABS.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition-colors whitespace-nowrap ${activeTab === tab.id ? "bg-[#1E4D3D] text-white" : "text-[#64748b] hover:text-[#1a1a1a] hover:bg-[#f8f9fa]"}`}
+            >
+              <tab.icon className="h-4 w-4 flex-shrink-0" />
+              <span className="hidden sm:inline">{tab.label}</span>
+              <span className="sm:hidden">{tab.label.split(" ")[0]}</span>
+            </button>
+          ))}
+        </div>
       </div>
 
       {loading ? (

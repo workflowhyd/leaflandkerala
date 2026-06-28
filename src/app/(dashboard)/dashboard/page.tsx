@@ -57,17 +57,17 @@ export default async function DashboardPage() {
     revenueChange > 0 ? "up" : revenueChange < 0 ? "down" : "neutral";
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 lg:space-y-6">
       {/* Page header */}
       <div>
-        <h1 className="text-2xl font-bold text-[#1a1a1a]">Dashboard</h1>
-        <p className="mt-1 text-sm text-[#64748b]">
+        <h1 className="text-xl font-bold text-[#1a1a1a] lg:text-2xl">Dashboard</h1>
+        <p className="mt-0.5 text-sm text-[#64748b]">
           Welcome back! Here&apos;s what&apos;s happening with LeafLand Kerala.
         </p>
       </div>
 
-      {/* Stat cards — 6 columns on xl, 3 on md, 2 on sm */}
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6">
+      {/* Stat cards — 2 cols on mobile, 3 on md, 6 on xl */}
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6 lg:gap-4">
         <StatCard
           title="Total Revenue"
           value={formatCurrency(stats.totalRevenue)}
@@ -83,25 +83,25 @@ export default async function DashboardPage() {
           color="#3B7A57"
         />
         <StatCard
-          title="Pending Deliveries"
+          title="Pending"
           value={stats.pendingOrders.toLocaleString("en-IN")}
           icon={Truck}
           color="#F9A825"
         />
         <StatCard
-          title="Low Stock Alerts"
+          title="Low Stock"
           value={stats.lowStockProducts.toLocaleString("en-IN")}
           icon={AlertTriangle}
           color="#D32F2F"
         />
         <StatCard
-          title="Active Customers"
+          title="Customers"
           value={stats.activeCustomers.toLocaleString("en-IN")}
           icon={Users}
           color="#2E7D32"
         />
         <StatCard
-          title="Monthly Revenue"
+          title="Monthly Rev."
           value={formatCurrency(
             monthlyRevenue[monthlyRevenue.length - 1]?.revenue ?? 0
           )}
@@ -112,8 +112,8 @@ export default async function DashboardPage() {
         />
       </div>
 
-      {/* Charts row */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+      {/* Charts row — stack on mobile, side-by-side on lg */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:gap-6">
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
@@ -149,9 +149,8 @@ export default async function DashboardPage() {
         </Card>
       </div>
 
-      {/* Recent orders + Top employees */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
-        {/* Recent Orders — takes 3/5 */}
+      {/* Recent orders + Top employees — stack on mobile, 5-col grid on lg */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-5 lg:gap-6">
         <Card className="lg:col-span-3">
           <CardHeader>
             <div className="flex items-center justify-between">
@@ -172,7 +171,6 @@ export default async function DashboardPage() {
           </CardContent>
         </Card>
 
-        {/* Top Employees — takes 2/5 */}
         <Card className="lg:col-span-2">
           <CardHeader>
             <div className="flex items-center justify-between">

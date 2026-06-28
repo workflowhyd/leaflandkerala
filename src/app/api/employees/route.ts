@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
-import { hashPassword } from "@/lib/auth";
+import { createSupabaseAdmin } from "@/lib/supabase/server";
 import { z } from "zod";
 
 const employeeSchema = z.object({
   name: z.string().min(2),
-  email: z.string().email(),
+  email: z.string().min(5),
   mobile: z.string().min(10).max(15),
   password: z.string().min(8),
   address: z.string().optional(),
@@ -61,21 +61,46 @@ export async function POST(request: NextRequest) {
   const body = await request.json();
   const parsed = employeeSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+    return NextResponse.json({ error: parsed.error.issues }, { status: 400 });
   }
 
-  const existing = await prisma.user.findUnique({ where: { email: parsed.data.email } });
+  const existing = await prisma.user.findUnique({
+    where: { email: parsed.data.email },
+  });
   if (existing) {
     return NextResponse.json({ error: "Email already exists" }, { status: 409 });
   }
 
-  const hashedPassword = await hashPassword(parsed.data.password);
+  const supabaseAdmin = createSupabaseAdmin();
 
+  // Create the user in Supabase Auth
+  const { data: authData, error: authError } =
+    await supabaseAdmin.auth.admin.createUser({
+      email: parsed.data.email,
+      password: parsed.data.password,
+      email_confirm: true,
+      user_metadata: {
+        name: parsed.data.name,
+        role: "EMPLOYEE",
+      },
+    });
+
+  if (authError || !authData.user) {
+    console.error("[employees/post] Supabase auth error:", authError);
+    return NextResponse.json(
+      { error: authError?.message || "Failed to create auth account" },
+      { status: 500 }
+    );
+  }
+
+  const supabaseUserId = authData.user.id;
+
+  // Create User profile + Employee record in the database
   const user = await prisma.user.create({
     data: {
+      id: supabaseUserId,
       name: parsed.data.name,
       email: parsed.data.email,
-      password: hashedPassword,
       role: "EMPLOYEE",
       employee: {
         create: {
@@ -99,5 +124,8 @@ export async function POST(request: NextRequest) {
     },
   });
 
-  return NextResponse.json({ id: user.employee?.id, name: user.name, email: user.email }, { status: 201 });
+  return NextResponse.json(
+    { id: user.employee?.id, name: user.name, email: user.email },
+    { status: 201 }
+  );
 }

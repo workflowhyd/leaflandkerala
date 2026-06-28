@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -176,7 +177,7 @@ export function AddEmployeeModal({ open, onClose, onSuccess }: AddEmployeeModalP
           </div>
         )}
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Input
             label="Full Name *"
             placeholder="Employee full name"
@@ -194,7 +195,7 @@ export function AddEmployeeModal({ open, onClose, onSuccess }: AddEmployeeModalP
           />
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Input
             label="Mobile *"
             placeholder="10-digit mobile number"
@@ -221,7 +222,7 @@ export function AddEmployeeModal({ open, onClose, onSuccess }: AddEmployeeModalP
           rows={2}
         />
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Input
             label="Territory"
             placeholder="e.g. Ernakulam District"
@@ -264,9 +265,11 @@ export function AddEmployeeModal({ open, onClose, onSuccess }: AddEmployeeModalP
             />
             {document.preview ? (
               <div className="relative inline-block">
-                <img
+                <Image
                   src={document.preview}
                   alt="Document preview"
+                  width={128}
+                  height={128}
                   className="h-32 w-auto rounded-lg border border-[#e2e8f0] object-contain"
                 />
                 <button

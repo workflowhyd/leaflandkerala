@@ -21,7 +21,6 @@ interface LogVisitModalProps {
 }
 
 export function LogVisitModal({ open, onClose, onSuccess }: LogVisitModalProps) {
-  const [customerId, setCustomerId] = useState("");
   const [customerSearch, setCustomerSearch] = useState("");
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);

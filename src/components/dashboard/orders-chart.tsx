@@ -38,8 +38,7 @@ const STATUS_COLORS: Record<string, string> = {
   CANCELLED: "#D32F2F",
 };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function CustomTooltip({ active, payload }: any) {
+function CustomTooltip({ active, payload }: { active?: boolean; payload?: Array<{ name: string; value: number; payload: { fill: string } }> }) {
   if (active && payload && payload.length) {
     return (
       <div className="rounded-xl border border-[#e2e8f0] bg-white px-4 py-3 shadow-lg">

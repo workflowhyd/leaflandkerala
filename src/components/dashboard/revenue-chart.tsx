@@ -25,8 +25,7 @@ function formatINR(value: number) {
   return `₹${value}`;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function CustomTooltip({ active, payload, label }: any) {
+function CustomTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ value: number }>; label?: string }) {
   if (active && payload && payload.length) {
     return (
       <div className="rounded-xl border border-[#e2e8f0] bg-white px-4 py-3 shadow-lg">

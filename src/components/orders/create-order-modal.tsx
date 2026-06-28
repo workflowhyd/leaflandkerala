@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Search, Plus, Minus, Trash2, ChevronRight, ChevronLeft, Package } from "lucide-react";
+import { Plus, Minus, Trash2, ChevronRight, ChevronLeft } from "lucide-react";
 import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";

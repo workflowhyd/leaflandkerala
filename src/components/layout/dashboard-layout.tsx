@@ -1,7 +1,5 @@
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
-import { Sidebar } from "./sidebar";
-import { TopNav } from "./top-nav";
 import { DashboardClientShell } from "./dashboard-client-shell";
 
 interface DashboardLayoutProps {

@@ -127,3 +127,20 @@ body {
 .fade-in {
   animation: fadeIn 0.3s ease forwards;
 }
+
+@keyframes slideInLeft {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(0); }
+}
+
+/* Safe area bottom padding for iOS */
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Mobile: add bottom spacing for bottom nav */
+@media (max-width: 1023px) {
+  main {
+    padding-bottom: calc(5rem + env(safe-area-inset-bottom, 0px));
+  }
+}

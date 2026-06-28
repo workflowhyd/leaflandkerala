@@ -1,4 +1,4 @@
-import { validateCredentials, setSession } from "@/lib/auth";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/prisma";
 
 export async function POST(request: Request) {
@@ -12,33 +12,52 @@ export async function POST(request: Request) {
       );
     }
 
-    const sessionPayload = await validateCredentials(email, password);
+    const supabase = await createSupabaseServerClient();
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
 
-    if (!sessionPayload) {
+    if (error || !data.user) {
       return Response.json(
         { error: "Invalid email or password." },
         { status: 401 }
       );
     }
 
-    await setSession(sessionPayload);
+    // Verify the user profile exists and is active
+    const profile = await prisma.user.findUnique({
+      where: { id: data.user.id },
+    });
 
-    // Log activity
+    if (!profile) {
+      await supabase.auth.signOut();
+      return Response.json(
+        { error: "Account not found. Contact your administrator." },
+        { status: 403 }
+      );
+    }
+
+    if (!profile.isActive) {
+      await supabase.auth.signOut();
+      return Response.json(
+        { error: "Your account has been disabled. Contact your administrator." },
+        { status: 403 }
+      );
+    }
+
     await prisma.activityLog.create({
       data: {
-        userId: sessionPayload.userId,
+        userId: profile.id,
         type: "LOGIN",
-        description: `User ${sessionPayload.name} signed in.`,
-        metadata: { email: sessionPayload.email, role: sessionPayload.role },
+        description: `User ${profile.name} signed in.`,
+        metadata: { email: profile.email, role: profile.role },
       },
     });
 
     return Response.json({
       success: true,
-      user: {
-        name: sessionPayload.name,
-        role: sessionPayload.role,
-      },
+      user: { name: profile.name, role: profile.role },
     });
   } catch (err) {
     console.error("[auth/login]", err);

@@ -10,11 +10,11 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@
 
 type TabId = "company" | "whatsapp" | "commission" | "pincodes";
 
-const TABS: { id: TabId; label: string; icon: React.FC<{ className?: string }> }[] = [
-  { id: "company", label: "Company Info", icon: Building2 },
-  { id: "whatsapp", label: "WhatsApp Notifications", icon: MessageSquare },
-  { id: "commission", label: "Commission Settings", icon: Percent },
-  { id: "pincodes", label: "Pincode Management", icon: MapPin },
+const TABS: { id: TabId; label: string; shortLabel: string; icon: React.FC<{ className?: string }> }[] = [
+  { id: "company", label: "Company Info", shortLabel: "Company", icon: Building2 },
+  { id: "whatsapp", label: "WhatsApp", shortLabel: "WhatsApp", icon: MessageSquare },
+  { id: "commission", label: "Commission", shortLabel: "Commission", icon: Percent },
+  { id: "pincodes", label: "Pincodes", shortLabel: "Pincodes", icon: MapPin },
 ];
 
 interface CompanyInfo {
@@ -55,6 +55,45 @@ interface Pincode {
   _count?: { customers: number };
 }
 
+function DeletePincodeModal({
+  open,
+  pincode,
+  loading,
+  onConfirm,
+  onCancel,
+}: {
+  open: boolean;
+  pincode: Pincode | null;
+  loading: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  if (!open || !pincode) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onCancel} />
+      <div className="relative z-10 w-full max-w-sm rounded-xl bg-white p-6 shadow-2xl">
+        <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-[#D32F2F]/10">
+          <Trash2 className="h-6 w-6 text-[#D32F2F]" />
+        </div>
+        <h3 className="mb-2 text-lg font-semibold text-[#1a1a1a]">Delete Pincode</h3>
+        <p className="mb-1 text-sm font-medium text-[#1a1a1a]">{pincode.code} — {pincode.area || pincode.district || "No area"}</p>
+        <p className="mb-6 text-sm text-[#64748b]">
+          This will remove the pincode from the system. Existing customers linked to this pincode will not be affected.
+        </p>
+        <div className="flex gap-3">
+          <Button variant="outline" className="flex-1" onClick={onCancel} disabled={loading}>
+            Cancel
+          </Button>
+          <Button variant="danger" className="flex-1" onClick={onConfirm} loading={loading}>
+            Delete
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<TabId>("company");
   const [saving, setSaving] = useState(false);
@@ -66,6 +105,8 @@ export default function SettingsPage() {
   const [pincodes, setPincodes] = useState<Pincode[]>([]);
   const [newPincode, setNewPincode] = useState({ code: "", area: "", district: "" });
   const [pincodeLoading, setPincodeLoading] = useState(false);
+  const [deletePin, setDeletePin] = useState<Pincode | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
   const logoInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -141,30 +182,37 @@ export default function SettingsPage() {
     fetchPincodes();
   };
 
-  const handleDeletePincode = async (id: string) => {
-    if (!confirm("Delete this pincode?")) return;
-    await fetch(`/api/pincodes/${id}`, { method: "DELETE" });
+  const handleDeletePincode = async () => {
+    if (!deletePin) return;
+    setDeleteLoading(true);
+    await fetch(`/api/pincodes/${deletePin.id}`, { method: "DELETE" });
+    setDeleteLoading(false);
+    setDeletePin(null);
     fetchPincodes();
   };
 
   return (
-    <div className="flex flex-col gap-6 p-6">
+    <div className="space-y-4 lg:space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-[#1a1a1a]">Settings</h1>
+        <h1 className="text-xl font-bold text-[#1a1a1a] lg:text-2xl">Settings</h1>
         <p className="text-sm text-[#64748b] mt-0.5">Configure system preferences and business settings</p>
       </div>
 
-      <div className="flex items-center gap-1 rounded-lg border border-[#e2e8f0] bg-white p-1 w-fit flex-wrap">
-        {TABS.map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            className={`flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors ${activeTab === tab.id ? "bg-[#1E4D3D] text-white" : "text-[#64748b] hover:text-[#1a1a1a] hover:bg-[#f8f9fa]"}`}
-          >
-            <tab.icon className="h-4 w-4" />
-            {tab.label}
-          </button>
-        ))}
+      {/* Tabs — horizontally scrollable on mobile */}
+      <div className="overflow-x-auto -mx-4 px-4 lg:mx-0 lg:px-0 pb-1">
+        <div className="flex items-center gap-1 rounded-lg border border-[#e2e8f0] bg-white p-1 w-max lg:w-fit min-w-full lg:min-w-0">
+          {TABS.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors whitespace-nowrap ${activeTab === tab.id ? "bg-[#1E4D3D] text-white" : "text-[#64748b] hover:text-[#1a1a1a] hover:bg-[#f8f9fa]"}`}
+            >
+              <tab.icon className="h-4 w-4 flex-shrink-0" />
+              <span className="sm:hidden">{tab.shortLabel}</span>
+              <span className="hidden sm:inline">{tab.label}</span>
+            </button>
+          ))}
+        </div>
       </div>
 
       {saveMsg && (
@@ -188,6 +236,7 @@ export default function SettingsPage() {
               <div className="sm:col-span-2 flex flex-col gap-2">
                 <label className="text-sm font-medium text-[#1a1a1a]">Company Logo</label>
                 {company.logoUrl && (
+                  // eslint-disable-next-line @next/next/no-img-element
                   <img src={company.logoUrl} alt="Logo" className="h-16 w-16 object-contain rounded-md border border-[#e2e8f0]" />
                 )}
                 <input ref={logoInputRef} type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} />
@@ -215,7 +264,7 @@ export default function SettingsPage() {
                   <p className="font-medium text-[#1a1a1a]">Enable WhatsApp Notifications</p>
                   <p className="text-sm text-[#64748b]">Send automated messages to customers</p>
                 </div>
-                <button type="button" onClick={() => setWhatsapp((p) => ({ ...p, isEnabled: !p.isEnabled }))} className="text-[#1E4D3D]">
+                <button type="button" onClick={() => setWhatsapp((p) => ({ ...p, isEnabled: !p.isEnabled }))} className="text-[#1E4D3D] flex-shrink-0 ml-4">
                   {whatsapp.isEnabled ? <ToggleRight className="h-8 w-8" /> : <ToggleLeft className="h-8 w-8 text-[#64748b]" />}
                 </button>
               </div>
@@ -323,7 +372,7 @@ export default function SettingsPage() {
             <CardHeader><CardTitle>Add New Pincode</CardTitle></CardHeader>
             <CardContent>
               <div className="flex flex-wrap items-end gap-3">
-                <div className="w-32">
+                <div className="w-32 flex-shrink-0">
                   <Input
                     label="Pincode"
                     placeholder="600001"
@@ -332,7 +381,7 @@ export default function SettingsPage() {
                     onChange={(e) => setNewPincode((p) => ({ ...p, code: e.target.value.replace(/\D/g, "") }))}
                   />
                 </div>
-                <div className="flex-1 min-w-[150px]">
+                <div className="flex-1 min-w-[140px]">
                   <Input
                     label="Area"
                     placeholder="Area name"
@@ -340,7 +389,7 @@ export default function SettingsPage() {
                     onChange={(e) => setNewPincode((p) => ({ ...p, area: e.target.value }))}
                   />
                 </div>
-                <div className="flex-1 min-w-[150px]">
+                <div className="flex-1 min-w-[140px]">
                   <Input
                     label="District"
                     placeholder="District"
@@ -348,7 +397,7 @@ export default function SettingsPage() {
                     onChange={(e) => setNewPincode((p) => ({ ...p, district: e.target.value }))}
                   />
                 </div>
-                <Button loading={pincodeLoading} onClick={handleAddPincode} disabled={newPincode.code.length !== 6}>
+                <Button loading={pincodeLoading} onClick={handleAddPincode} disabled={newPincode.code.length !== 6} className="flex-shrink-0">
                   <Plus className="h-4 w-4" /> Add
                 </Button>
               </div>
@@ -361,57 +410,107 @@ export default function SettingsPage() {
               {pincodes.length === 0 ? (
                 <p className="px-6 pb-6 text-sm text-[#64748b]">No pincodes configured yet.</p>
               ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Pincode</TableHead>
-                      <TableHead>Area</TableHead>
-                      <TableHead>District</TableHead>
-                      <TableHead>Customers</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
+                <>
+                  {/* Mobile cards */}
+                  <div className="flex flex-col divide-y divide-[#e2e8f0] md:hidden">
                     {pincodes.map((p) => (
-                      <TableRow key={p.id}>
-                        <TableCell className="font-mono font-medium">{p.code}</TableCell>
-                        <TableCell>{p.area || "—"}</TableCell>
-                        <TableCell>{p.district || "—"}</TableCell>
-                        <TableCell>{p._count?.customers ?? 0}</TableCell>
-                        <TableCell>
-                          <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${p.isActive ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-600"}`}>
-                            {p.isActive ? "Active" : "Inactive"}
-                          </span>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <button
-                              type="button"
-                              onClick={() => handleTogglePincode(p.id, p.isActive)}
-                              title={p.isActive ? "Deactivate" : "Activate"}
-                              className="text-[#1E4D3D] hover:text-[#3B7A57]"
-                            >
-                              {p.isActive ? <ToggleRight className="h-5 w-5" /> : <ToggleLeft className="h-5 w-5 text-[#64748b]" />}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleDeletePincode(p.id)}
-                              className="text-[#D32F2F] hover:text-[#B71C1C]"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
+                      <div key={p.id} className="flex items-center justify-between gap-3 px-4 py-3">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-mono font-semibold text-[#1a1a1a]">{p.code}</span>
+                            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ${p.isActive ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-600"}`}>
+                              {p.isActive ? "Active" : "Inactive"}
+                            </span>
                           </div>
-                        </TableCell>
-                      </TableRow>
+                          <p className="text-xs text-[#64748b] mt-0.5">
+                            {[p.area, p.district].filter(Boolean).join(", ") || "No area"}
+                            {(p._count?.customers ?? 0) > 0 && ` · ${p._count?.customers} customers`}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => handleTogglePincode(p.id, p.isActive)}
+                            className="text-[#1E4D3D]"
+                            title={p.isActive ? "Deactivate" : "Activate"}
+                          >
+                            {p.isActive ? <ToggleRight className="h-6 w-6" /> : <ToggleLeft className="h-6 w-6 text-[#64748b]" />}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setDeletePin(p)}
+                            className="text-[#D32F2F]"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </div>
                     ))}
-                  </TableBody>
-                </Table>
+                  </div>
+
+                  {/* Desktop table */}
+                  <div className="hidden md:block overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Pincode</TableHead>
+                          <TableHead>Area</TableHead>
+                          <TableHead>District</TableHead>
+                          <TableHead>Customers</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {pincodes.map((p) => (
+                          <TableRow key={p.id}>
+                            <TableCell className="font-mono font-medium">{p.code}</TableCell>
+                            <TableCell>{p.area || "—"}</TableCell>
+                            <TableCell>{p.district || "—"}</TableCell>
+                            <TableCell>{p._count?.customers ?? 0}</TableCell>
+                            <TableCell>
+                              <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${p.isActive ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-600"}`}>
+                                {p.isActive ? "Active" : "Inactive"}
+                              </span>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => handleTogglePincode(p.id, p.isActive)}
+                                  title={p.isActive ? "Deactivate" : "Activate"}
+                                  className="text-[#1E4D3D] hover:text-[#3B7A57]"
+                                >
+                                  {p.isActive ? <ToggleRight className="h-5 w-5" /> : <ToggleLeft className="h-5 w-5 text-[#64748b]" />}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setDeletePin(p)}
+                                  className="text-[#D32F2F] hover:text-[#B71C1C]"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </>
               )}
             </CardContent>
           </Card>
         </div>
       )}
+
+      <DeletePincodeModal
+        open={!!deletePin}
+        pincode={deletePin}
+        loading={deleteLoading}
+        onConfirm={handleDeletePincode}
+        onCancel={() => setDeletePin(null)}
+      />
     </div>
   );
 }

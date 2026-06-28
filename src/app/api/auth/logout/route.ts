@@ -1,4 +1,5 @@
-import { clearSession, getSession } from "@/lib/auth";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 export async function POST() {
@@ -16,13 +17,14 @@ export async function POST() {
       });
     }
 
-    await clearSession();
+    const supabase = await createSupabaseServerClient();
+    await supabase.auth.signOut();
 
     return Response.json({ success: true });
   } catch (err) {
     console.error("[auth/logout]", err);
-    // Still clear the session even if logging fails
-    await clearSession().catch(() => null);
+    const supabase = await createSupabaseServerClient();
+    await supabase.auth.signOut().catch(() => null);
     return Response.json({ success: true });
   }
 }

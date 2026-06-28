@@ -10,6 +10,7 @@ import {
   ChevronDown,
   User,
   LogOut,
+  X,
 } from "lucide-react";
 
 interface TopNavProps {
@@ -30,7 +31,9 @@ export function TopNav({
   onMenuToggle,
 }: TopNavProps) {
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -45,6 +48,12 @@ export function TopNav({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  useEffect(() => {
+    if (searchOpen && searchRef.current) {
+      searchRef.current.focus();
+    }
+  }, [searchOpen]);
+
   const initials = userName
     .split(" ")
     .map((n) => n[0])
@@ -53,18 +62,23 @@ export function TopNav({
     .slice(0, 2);
 
   return (
-    <header className="flex h-16 items-center gap-4 border-b border-[#e2e8f0] bg-white px-6">
+    <header className="relative flex h-14 lg:h-16 items-center gap-3 border-b border-[#e2e8f0] bg-white px-3 lg:px-6 flex-shrink-0">
+      {/* Mobile: hamburger */}
       <button
         onClick={onMenuToggle}
-        className="flex h-8 w-8 items-center justify-center rounded-md text-[#64748b] hover:bg-[#f1f5f9] hover:text-[#1a1a1a] transition-colors lg:hidden"
-        aria-label="Toggle menu"
+        className="flex h-9 w-9 items-center justify-center rounded-md text-[#64748b] hover:bg-[#f1f5f9] hover:text-[#1a1a1a] transition-colors lg:hidden flex-shrink-0"
+        aria-label="Open navigation menu"
       >
         <Menu className="h-5 w-5" />
       </button>
 
-      <h1 className="text-lg font-semibold text-[#1a1a1a] mr-auto">{title}</h1>
+      {/* Page title */}
+      <h1 className="text-base font-semibold text-[#1a1a1a] mr-auto lg:text-lg truncate">
+        {title}
+      </h1>
 
-      <div className="hidden sm:flex items-center gap-2 rounded-lg border border-[#e2e8f0] bg-[#f8f9fa] px-3 py-2 w-64 focus-within:border-[#3B7A57] focus-within:ring-1 focus-within:ring-[#3B7A57] transition-all">
+      {/* Desktop search */}
+      <div className="hidden lg:flex items-center gap-2 rounded-lg border border-[#e2e8f0] bg-[#f8f9fa] px-3 py-2 w-64 focus-within:border-[#3B7A57] focus-within:ring-1 focus-within:ring-[#3B7A57] transition-all">
         <Search className="h-4 w-4 text-[#64748b] flex-shrink-0" />
         <input
           type="search"
@@ -73,11 +87,21 @@ export function TopNav({
         />
       </div>
 
+      {/* Mobile search toggle */}
       <button
-        className="relative flex h-9 w-9 items-center justify-center rounded-full text-[#64748b] hover:bg-[#f1f5f9] hover:text-[#1a1a1a] transition-colors"
+        onClick={() => setSearchOpen((prev) => !prev)}
+        className="flex h-9 w-9 items-center justify-center rounded-full text-[#64748b] hover:bg-[#f1f5f9] hover:text-[#1a1a1a] transition-colors lg:hidden flex-shrink-0"
+        aria-label="Search"
+      >
+        <Search className="h-4 w-4" />
+      </button>
+
+      {/* Notifications */}
+      <button
+        className="relative flex h-9 w-9 items-center justify-center rounded-full text-[#64748b] hover:bg-[#f1f5f9] hover:text-[#1a1a1a] transition-colors flex-shrink-0"
         aria-label={`${notificationCount} notifications`}
       >
-        <Bell className="h-5 w-5" />
+        <Bell className="h-4 w-4 lg:h-5 lg:w-5" />
         {notificationCount > 0 && (
           <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-[#D32F2F] text-[9px] font-bold text-white leading-none">
             {notificationCount > 9 ? "9+" : notificationCount}
@@ -85,14 +109,13 @@ export function TopNav({
         )}
       </button>
 
-      <div className="relative" ref={dropdownRef}>
+      {/* User dropdown */}
+      <div className="relative flex-shrink-0" ref={dropdownRef}>
         <button
           onClick={() => setDropdownOpen((prev) => !prev)}
           className={cn(
             "flex items-center gap-2 rounded-lg px-2 py-1.5 transition-colors",
-            dropdownOpen
-              ? "bg-[#f1f5f9]"
-              : "hover:bg-[#f1f5f9]"
+            dropdownOpen ? "bg-[#f1f5f9]" : "hover:bg-[#f1f5f9]"
           )}
           aria-expanded={dropdownOpen}
           aria-haspopup="true"
@@ -101,14 +124,16 @@ export function TopNav({
             {initials}
           </div>
           <div className="hidden md:flex flex-col items-start leading-tight">
-            <span className="text-sm font-medium text-[#1a1a1a]">{userName}</span>
+            <span className="text-sm font-medium text-[#1a1a1a] max-w-[100px] truncate">
+              {userName}
+            </span>
             <span className="text-[10px] text-[#64748b] uppercase tracking-wide">
               {userRole}
             </span>
           </div>
           <ChevronDown
             className={cn(
-              "h-4 w-4 text-[#64748b] transition-transform duration-150",
+              "hidden md:block h-4 w-4 text-[#64748b] transition-transform duration-150",
               dropdownOpen && "rotate-180"
             )}
           />
@@ -143,6 +168,25 @@ export function TopNav({
           </div>
         )}
       </div>
+
+      {/* Mobile search bar overlay */}
+      {searchOpen && (
+        <div className="absolute inset-x-0 top-0 z-20 flex h-full items-center gap-2 bg-white px-3 lg:hidden">
+          <Search className="h-4 w-4 text-[#64748b] flex-shrink-0" />
+          <input
+            ref={searchRef}
+            type="search"
+            placeholder="Search..."
+            className="flex-1 bg-transparent text-sm text-[#1a1a1a] placeholder:text-[#64748b] outline-none"
+          />
+          <button
+            onClick={() => setSearchOpen(false)}
+            className="flex h-8 w-8 items-center justify-center rounded-md text-[#64748b] hover:bg-[#f1f5f9]"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
     </header>
   );
 }

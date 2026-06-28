@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
+import { createSupabaseAdmin } from "@/lib/supabase/server";
 
-export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(
+  _request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
   const session = await getSession();
   if (!session || session.role !== "ADMIN") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -15,7 +19,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       documents: true,
       pincodes: { include: { pincode: true } },
       customers: { select: { id: true, name: true, status: true }, take: 10 },
-      orders: { select: { id: true, orderNumber: true, totalAmount: true, status: true }, take: 10 },
+      orders: {
+        select: { id: true, orderNumber: true, totalAmount: true, status: true },
+        take: 10,
+      },
       commissions: true,
       _count: { select: { customers: true, orders: true, fieldVisits: true } },
     },
@@ -25,7 +32,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   return NextResponse.json(employee);
 }
 
-export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
   const session = await getSession();
   if (!session || session.role !== "ADMIN") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -47,16 +57,26 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   });
 
   if (body.isActive !== undefined) {
+    // Sync active status in our DB
     await prisma.user.update({
       where: { id: employee.userId },
       data: { isActive: body.isActive },
+    });
+
+    // Sync active status in Supabase Auth
+    const supabaseAdmin = createSupabaseAdmin();
+    await supabaseAdmin.auth.admin.updateUserById(employee.userId, {
+      ban_duration: body.isActive ? "none" : "876600h", // ~100 years = effectively disabled
     });
   }
 
   return NextResponse.json(employee);
 }
 
-export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(
+  _request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
   const session = await getSession();
   if (!session || session.role !== "ADMIN") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -67,7 +87,17 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     where: { id },
     data: { isActive: false },
   });
-  await prisma.user.update({ where: { id: employee.userId }, data: { isActive: false } });
+
+  await prisma.user.update({
+    where: { id: employee.userId },
+    data: { isActive: false },
+  });
+
+  // Disable in Supabase Auth
+  const supabaseAdmin = createSupabaseAdmin();
+  await supabaseAdmin.auth.admin.updateUserById(employee.userId, {
+    ban_duration: "876600h",
+  });
 
   return NextResponse.json({ success: true });
 }
