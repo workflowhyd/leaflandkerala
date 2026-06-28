@@ -24,6 +24,9 @@ const eslintConfig = defineConfig([
       "no-unused-vars": "warn",
       "no-console": "off",
       "@typescript-eslint/no-require-imports": "warn",
+      "@next/next/no-html-link-for-pages": "warn",
+      "no-use-before-define": "warn",
+      "@typescript-eslint/no-use-before-define": "warn",
     },
   },
 ]);
