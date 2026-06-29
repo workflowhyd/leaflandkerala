@@ -30,7 +30,7 @@ export default function LoginPage() {
       if (!res.ok || data.error) {
         setError(data.error || "Login failed. Please try again.");
       } else {
-        router.push("/dashboard");
+        router.push(data.user?.role === "EMPLOYEE" ? "/employee/home" : "/dashboard");
       }
     } catch {
       setError("Network error. Please check your connection.");
