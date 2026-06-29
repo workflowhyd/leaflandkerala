@@ -72,7 +72,6 @@ export function LogVisitModal({ open, onClose, onSuccess }: LogVisitModalProps) 
   };
 
   const handleReset = () => {
-    setCustomerId("");
     setCustomerSearch("");
     setSelectedCustomer(null);
     setVisitDate(new Date().toISOString().slice(0, 16));

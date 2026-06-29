@@ -54,9 +54,24 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
-  // Admin-only route check using role stored in Supabase user_metadata
+  const role = user.user_metadata?.role as string | undefined;
+
+  // Employee → only /employee/* allowed; redirect dashboard hits
+  if (role === "EMPLOYEE") {
+    if (pathname.startsWith("/dashboard")) {
+      return NextResponse.redirect(new URL("/employee/home", request.url));
+    }
+    return response;
+  }
+
+  // Admin-only route check
   const isAdminOnly = ADMIN_ONLY.some((r) => pathname.startsWith(r));
-  if (isAdminOnly && user.user_metadata?.role !== "ADMIN") {
+  if (isAdminOnly && role !== "ADMIN") {
+    return NextResponse.redirect(new URL("/dashboard", request.url));
+  }
+
+  // Admin should not access employee routes
+  if (pathname.startsWith("/employee")) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 

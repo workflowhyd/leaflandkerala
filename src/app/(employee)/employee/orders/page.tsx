@@ -1,0 +1,631 @@
+"use client";
+import { useEffect, useState, useCallback, useRef, Suspense } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
+import {
+  ArrowLeft, Plus, Minus, Search, Trash2, MapPin, CheckCircle,
+  ChevronRight, ShoppingCart, X, AlertCircle,
+} from "lucide-react";
+import { useCart, CartItem } from "@/components/employee/cart-context";
+
+// ─── Types ───────────────────────────────────────────────────────────────────
+
+interface Product {
+  id: string; name: string; sku: string; price: number;
+  salePrice?: number | null; imageUrl?: string | null; category: string;
+}
+
+interface Customer {
+  id: string; name: string; mobile: string; address: string;
+  village?: string | null; district: string; pincode: string;
+}
+
+interface OrderLine {
+  quantity: number; price: number; subtotal: number;
+  product: { id: string; name: string; sku: string; imageUrl?: string | null };
+}
+
+interface Order {
+  id: string; orderNumber: string; status: string; totalAmount: number;
+  notes?: string | null; createdAt: string;
+  customer: { id: string; name: string; mobile: string; village?: string | null };
+  items: OrderLine[];
+}
+
+type Step = "list" | "products" | "cart" | "customer" | "confirm";
+
+const STATUS_COLOR: Record<string, string> = {
+  NEW: "bg-blue-100 text-blue-700",
+  CONFIRMED: "bg-green-100 text-green-700",
+  PROCESSING: "bg-yellow-100 text-yellow-700",
+  DELIVERED: "bg-gray-100 text-gray-600",
+  CANCELLED: "bg-red-100 text-red-600",
+};
+
+// ─── Offline queue ────────────────────────────────────────────────────────────
+
+const QUEUE_KEY = "employee_order_queue";
+
+function enqueueOrder(payload: object) {
+  try {
+    const q = JSON.parse(localStorage.getItem(QUEUE_KEY) ?? "[]");
+    q.push({ payload, queuedAt: new Date().toISOString() });
+    localStorage.setItem(QUEUE_KEY, JSON.stringify(q));
+  } catch {}
+}
+
+async function flushQueue() {
+  try {
+    const q: { payload: object }[] = JSON.parse(localStorage.getItem(QUEUE_KEY) ?? "[]");
+    if (!q.length) return;
+    const remaining = [];
+    for (const entry of q) {
+      const res = await fetch("/api/employee/orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(entry.payload),
+      });
+      if (!res.ok) remaining.push(entry);
+    }
+    localStorage.setItem(QUEUE_KEY, JSON.stringify(remaining));
+  } catch {}
+}
+
+// ─── Main Page ────────────────────────────────────────────────────────────────
+
+export default function OrdersPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center h-screen bg-gray-50"><div className="w-8 h-8 border-3 border-green-500 border-t-transparent rounded-full animate-spin" /></div>}>
+      <OrdersPageContent />
+    </Suspense>
+  );
+}
+
+function OrdersPageContent() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const { items: cartItems, addItem, removeItem, setQuantity, clearCart, total, itemCount } = useCart();
+
+  const [step, setStep] = useState<Step>(searchParams.get("new") === "1" ? "products" : "list");
+
+  // Orders list state
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [loadingOrders, setLoadingOrders] = useState(false);
+
+  // Product search state
+  const [productQuery, setProductQuery] = useState("");
+  const [products, setProducts] = useState<Product[]>([]);
+  const [searchingProducts, setSearchingProducts] = useState(false);
+
+  // Customer state
+  const [customerQuery, setCustomerQuery] = useState("");
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  const [searchingCustomers, setSearchingCustomers] = useState(false);
+  const [showNewCustomer, setShowNewCustomer] = useState(false);
+  const [newCustomer, setNewCustomer] = useState({ name: "", mobile: "", address: "", village: "", district: "", pincode: "" });
+
+  // Confirm state
+  const [notes, setNotes] = useState("");
+  const [gps, setGps] = useState<{ lat: number; lng: number } | null>(null);
+  const [gpsLoading, setGpsLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState("");
+
+  const productSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const customerSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Flush offline queue when online
+  useEffect(() => {
+    const handler = () => flushQueue();
+    window.addEventListener("online", handler);
+    if (navigator.onLine) flushQueue();
+    return () => window.removeEventListener("online", handler);
+  }, []);
+
+  // Load orders list
+  const loadOrders = useCallback(async () => {
+    setLoadingOrders(true);
+    try {
+      const res = await fetch("/api/employee/orders?view=week");
+      if (res.ok) setOrders(await res.json());
+    } finally {
+      setLoadingOrders(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (step === "list") loadOrders();
+  }, [step, loadOrders]);
+
+  // Product search with debounce
+  useEffect(() => {
+    if (productSearchTimer.current) clearTimeout(productSearchTimer.current);
+    productSearchTimer.current = setTimeout(async () => {
+      setSearchingProducts(true);
+      try {
+        const res = await fetch(`/api/employee/products?q=${encodeURIComponent(productQuery)}`);
+        if (res.ok) setProducts(await res.json());
+      } finally {
+        setSearchingProducts(false);
+      }
+    }, 300);
+    return () => { if (productSearchTimer.current) clearTimeout(productSearchTimer.current); };
+  }, [productQuery]);
+
+  // Customer search with debounce
+  useEffect(() => {
+    if (!customerQuery || step !== "customer") return;
+    if (customerSearchTimer.current) clearTimeout(customerSearchTimer.current);
+    customerSearchTimer.current = setTimeout(async () => {
+      setSearchingCustomers(true);
+      try {
+        const res = await fetch(`/api/employee/customers?q=${encodeURIComponent(customerQuery)}`);
+        if (res.ok) setCustomers(await res.json());
+      } finally {
+        setSearchingCustomers(false);
+      }
+    }, 300);
+    return () => { if (customerSearchTimer.current) clearTimeout(customerSearchTimer.current); };
+  }, [customerQuery, step]);
+
+  function captureGPS() {
+    if (!navigator.geolocation) return;
+    setGpsLoading(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => { setGps({ lat: pos.coords.latitude, lng: pos.coords.longitude }); setGpsLoading(false); },
+      () => setGpsLoading(false),
+      { timeout: 10000, maximumAge: 60000 }
+    );
+  }
+
+  async function handleCreateCustomer() {
+    const { name, mobile, address, district, pincode } = newCustomer;
+    if (!name || !mobile || !address || !district || !pincode) return;
+    const res = await fetch("/api/employee/customers", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(newCustomer),
+    });
+    if (res.ok || res.status === 409) {
+      const data = await res.json();
+      setSelectedCustomer(data.customer ?? data);
+      setShowNewCustomer(false);
+      setStep("confirm");
+    }
+  }
+
+  async function handleSubmitOrder() {
+    if (!selectedCustomer || !cartItems.length) return;
+    setSubmitting(true);
+    setSubmitError("");
+
+    const payload = {
+      customerId: selectedCustomer.id,
+      items: cartItems.map((i) => ({ productId: i.productId, quantity: i.quantity, price: i.price })),
+      notes,
+      latitude: gps?.lat,
+      longitude: gps?.lng,
+    };
+
+    try {
+      const res = await fetch("/api/employee/orders", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (res.ok) {
+        clearCart();
+        setStep("list");
+        router.replace("/employee/orders");
+      } else if (!navigator.onLine) {
+        enqueueOrder(payload);
+        clearCart();
+        setStep("list");
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setSubmitError(data.error ?? "Failed to submit order. Try again.");
+      }
+    } catch {
+      enqueueOrder(payload);
+      clearCart();
+      setStep("list");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  // ── Renders ────────────────────────────────────────────────────────────────
+
+  if (step === "list") return <OrdersList orders={orders} loading={loadingOrders} onNew={() => setStep("products")} />;
+
+  if (step === "products") return (
+    <div className="min-h-screen bg-gray-50 flex flex-col">
+      <div className="bg-green-600 px-4 pt-12 pb-4 flex items-center gap-3">
+        <button onClick={() => setStep("list")} className="text-white p-1"><ArrowLeft size={22} /></button>
+        <h1 className="text-white font-semibold text-lg flex-1">Search Products</h1>
+        {itemCount > 0 && (
+          <button onClick={() => setStep("cart")} className="relative text-white">
+            <ShoppingCart size={22} />
+            <span className="absolute -top-1.5 -right-1.5 bg-orange-400 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center font-bold">
+              {itemCount}
+            </span>
+          </button>
+        )}
+      </div>
+
+      <div className="px-4 py-3">
+        <div className="flex items-center gap-2 bg-white rounded-xl px-3 py-2 shadow-sm border border-gray-100">
+          <Search size={18} className="text-gray-400 shrink-0" />
+          <input
+            autoFocus
+            value={productQuery}
+            onChange={(e) => setProductQuery(e.target.value)}
+            placeholder="Product name or SKU..."
+            className="flex-1 text-sm outline-none bg-transparent"
+          />
+          {searchingProducts && <div className="w-4 h-4 border-2 border-green-500 border-t-transparent rounded-full animate-spin" />}
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-y-auto px-4 space-y-2 pb-4">
+        {products.map((p) => {
+          const inCart = cartItems.find((i) => i.productId === p.id);
+          const displayPrice = p.salePrice ?? p.price;
+          return (
+            <div key={p.id} className="bg-white rounded-xl p-3 shadow-sm border border-gray-100 flex items-center gap-3">
+              {p.imageUrl ? (
+                <img src={p.imageUrl} alt={p.name} className="w-12 h-12 rounded-lg object-cover shrink-0" />
+              ) : (
+                <div className="w-12 h-12 rounded-lg bg-green-50 flex items-center justify-center shrink-0 text-green-400 text-xs font-bold">
+                  {p.sku.slice(0, 3)}
+                </div>
+              )}
+              <div className="flex-1 min-w-0">
+                <p className="font-medium text-gray-800 text-sm truncate">{p.name}</p>
+                <p className="text-xs text-gray-400">{p.category}</p>
+                <p className="text-green-700 font-semibold text-sm mt-0.5">₹{displayPrice}</p>
+              </div>
+              {inCart ? (
+                <div className="flex items-center gap-2">
+                  <button onClick={() => setQuantity(p.id, inCart.quantity - 1)} className="w-7 h-7 rounded-full bg-green-100 text-green-700 flex items-center justify-center"><Minus size={14} /></button>
+                  <span className="w-5 text-center font-semibold text-sm">{inCart.quantity}</span>
+                  <button onClick={() => setQuantity(p.id, inCart.quantity + 1)} className="w-7 h-7 rounded-full bg-green-100 text-green-700 flex items-center justify-center"><Plus size={14} /></button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => addItem({ productId: p.id, name: p.name, sku: p.sku, price: displayPrice, imageUrl: p.imageUrl })}
+                  className="w-8 h-8 rounded-full bg-green-600 text-white flex items-center justify-center shadow-sm active:bg-green-700"
+                >
+                  <Plus size={16} />
+                </button>
+              )}
+            </div>
+          );
+        })}
+        {!searchingProducts && products.length === 0 && (
+          <p className="text-center text-gray-400 text-sm pt-8">
+            {productQuery ? "No products found" : "Type to search products"}
+          </p>
+        )}
+      </div>
+
+      {itemCount > 0 && (
+        <div className="px-4 pb-4">
+          <button
+            onClick={() => setStep("cart")}
+            className="w-full bg-green-600 text-white py-4 rounded-xl font-semibold shadow-sm active:bg-green-700 flex items-center justify-center gap-2"
+          >
+            <ShoppingCart size={18} />
+            View Cart ({itemCount} items) · ₹{total.toLocaleString("en-IN")}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+
+  if (step === "cart") return (
+    <div className="min-h-screen bg-gray-50 flex flex-col">
+      <div className="bg-green-600 px-4 pt-12 pb-4 flex items-center gap-3">
+        <button onClick={() => setStep("products")} className="text-white p-1"><ArrowLeft size={22} /></button>
+        <h1 className="text-white font-semibold text-lg flex-1">Your Cart</h1>
+      </div>
+
+      <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2">
+        {cartItems.map((item: CartItem) => (
+          <div key={item.productId} className="bg-white rounded-xl p-3 shadow-sm border border-gray-100 flex items-center gap-3">
+            <div className="flex-1 min-w-0">
+              <p className="font-medium text-gray-800 text-sm">{item.name}</p>
+              <p className="text-xs text-gray-400">{item.sku}</p>
+              <p className="text-green-700 font-semibold text-sm">₹{item.price} × {item.quantity} = ₹{(item.price * item.quantity).toLocaleString("en-IN")}</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button onClick={() => setQuantity(item.productId, item.quantity - 1)} className="w-7 h-7 rounded-full bg-green-100 text-green-700 flex items-center justify-center"><Minus size={14} /></button>
+              <span className="w-5 text-center font-semibold text-sm">{item.quantity}</span>
+              <button onClick={() => setQuantity(item.productId, item.quantity + 1)} className="w-7 h-7 rounded-full bg-green-100 text-green-700 flex items-center justify-center"><Plus size={14} /></button>
+              <button onClick={() => removeItem(item.productId)} className="w-7 h-7 rounded-full bg-red-50 text-red-400 flex items-center justify-center ml-1"><Trash2 size={13} /></button>
+            </div>
+          </div>
+        ))}
+
+        {cartItems.length === 0 && (
+          <div className="text-center pt-16">
+            <ShoppingCart size={40} className="mx-auto text-gray-200 mb-3" />
+            <p className="text-gray-400">Cart is empty</p>
+            <button onClick={() => setStep("products")} className="mt-4 text-green-600 font-medium text-sm">Add products</button>
+          </div>
+        )}
+      </div>
+
+      {cartItems.length > 0 && (
+        <div className="px-4 pb-4 space-y-2">
+          <div className="bg-white rounded-xl px-4 py-3 flex items-center justify-between shadow-sm border border-gray-100">
+            <span className="text-gray-600 font-medium">Total</span>
+            <span className="text-green-700 font-bold text-lg">₹{total.toLocaleString("en-IN")}</span>
+          </div>
+          <button onClick={() => setStep("customer")} className="w-full bg-green-600 text-white py-4 rounded-xl font-semibold shadow-sm active:bg-green-700 flex items-center justify-center gap-2">
+            Select Customer <ChevronRight size={18} />
+          </button>
+        </div>
+      )}
+    </div>
+  );
+
+  if (step === "customer") return (
+    <div className="min-h-screen bg-gray-50 flex flex-col">
+      <div className="bg-green-600 px-4 pt-12 pb-4 flex items-center gap-3">
+        <button onClick={() => setStep("cart")} className="text-white p-1"><ArrowLeft size={22} /></button>
+        <h1 className="text-white font-semibold text-lg flex-1">Select Customer</h1>
+      </div>
+
+      {!showNewCustomer ? (
+        <>
+          <div className="px-4 py-3">
+            <div className="flex items-center gap-2 bg-white rounded-xl px-3 py-2 shadow-sm border border-gray-100">
+              <Search size={18} className="text-gray-400 shrink-0" />
+              <input
+                autoFocus
+                value={customerQuery}
+                onChange={(e) => setCustomerQuery(e.target.value)}
+                placeholder="Search by name or mobile..."
+                className="flex-1 text-sm outline-none bg-transparent"
+              />
+              {searchingCustomers && <div className="w-4 h-4 border-2 border-green-500 border-t-transparent rounded-full animate-spin" />}
+            </div>
+          </div>
+
+          <div className="flex-1 overflow-y-auto px-4 space-y-2">
+            {customers.map((c) => (
+              <button
+                key={c.id}
+                onClick={() => { setSelectedCustomer(c); setStep("confirm"); }}
+                className="w-full bg-white rounded-xl p-3 shadow-sm border border-gray-100 text-left flex items-center gap-3 active:bg-green-50"
+              >
+                <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center text-green-700 font-bold text-sm shrink-0">
+                  {c.name[0]}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium text-gray-800 text-sm">{c.name}</p>
+                  <p className="text-xs text-gray-400">{c.mobile} · {c.village ?? c.district}</p>
+                </div>
+                <ChevronRight size={16} className="text-gray-300" />
+              </button>
+            ))}
+
+            {!searchingCustomers && customerQuery && customers.length === 0 && (
+              <p className="text-center text-gray-400 text-sm pt-6">No customers found</p>
+            )}
+            {!customerQuery && (
+              <p className="text-center text-gray-400 text-sm pt-6">Search to find existing customer</p>
+            )}
+          </div>
+
+          <div className="px-4 pb-4">
+            <button
+              onClick={() => { setNewCustomer((p) => ({ ...p, mobile: customerQuery.match(/^\d+$/) ? customerQuery : "" })); setShowNewCustomer(true); }}
+              className="w-full border-2 border-dashed border-green-300 text-green-600 py-4 rounded-xl font-medium text-sm active:bg-green-50 flex items-center justify-center gap-2"
+            >
+              <Plus size={16} /> New Customer
+            </button>
+          </div>
+        </>
+      ) : (
+        <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
+          <h2 className="font-semibold text-gray-700">New Customer</h2>
+          {([
+            { key: "name", label: "Full Name *", type: "text" },
+            { key: "mobile", label: "Mobile *", type: "tel" },
+            { key: "address", label: "Address *", type: "text" },
+            { key: "village", label: "Village", type: "text" },
+            { key: "district", label: "District *", type: "text" },
+            { key: "pincode", label: "Pincode *", type: "text" },
+          ] as const).map(({ key, label, type }) => (
+            <div key={key}>
+              <label className="text-xs text-gray-500 font-medium">{label}</label>
+              <input
+                type={type}
+                value={newCustomer[key]}
+                onChange={(e) => setNewCustomer((p) => ({ ...p, [key]: e.target.value }))}
+                className="w-full mt-1 px-3 py-2.5 bg-white border border-gray-200 rounded-xl text-sm outline-none focus:border-green-400"
+              />
+            </div>
+          ))}
+          <div className="flex gap-2 pt-2">
+            <button onClick={() => setShowNewCustomer(false)} className="flex-1 py-3 rounded-xl border border-gray-200 text-gray-600 font-medium text-sm">Cancel</button>
+            <button onClick={handleCreateCustomer} className="flex-1 py-3 rounded-xl bg-green-600 text-white font-semibold text-sm active:bg-green-700">Save & Select</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  // step === "confirm"
+  return (
+    <div className="min-h-screen bg-gray-50 flex flex-col">
+      <div className="bg-green-600 px-4 pt-12 pb-4 flex items-center gap-3">
+        <button onClick={() => setStep("customer")} className="text-white p-1"><ArrowLeft size={22} /></button>
+        <h1 className="text-white font-semibold text-lg flex-1">Confirm Order</h1>
+      </div>
+
+      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
+        {/* Customer */}
+        <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Customer</p>
+            <button onClick={() => setStep("customer")} className="text-xs text-green-600">Change</button>
+          </div>
+          <p className="font-semibold text-gray-800">{selectedCustomer?.name}</p>
+          <p className="text-sm text-gray-500">{selectedCustomer?.mobile}</p>
+          <p className="text-xs text-gray-400 mt-1">{selectedCustomer?.address}, {selectedCustomer?.district}</p>
+        </div>
+
+        {/* Items summary */}
+        <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Items ({itemCount})</p>
+            <button onClick={() => setStep("cart")} className="text-xs text-green-600">Edit</button>
+          </div>
+          {cartItems.map((i: CartItem) => (
+            <div key={i.productId} className="flex justify-between text-sm py-1">
+              <span className="text-gray-700">{i.name} × {i.quantity}</span>
+              <span className="font-medium text-gray-800">₹{(i.price * i.quantity).toLocaleString("en-IN")}</span>
+            </div>
+          ))}
+          <div className="border-t border-gray-100 mt-2 pt-2 flex justify-between font-bold text-gray-800">
+            <span>Total</span>
+            <span className="text-green-700">₹{total.toLocaleString("en-IN")}</span>
+          </div>
+        </div>
+
+        {/* GPS */}
+        <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Location (optional)</p>
+          {gps ? (
+            <div className="flex items-center gap-2 text-green-600 text-sm">
+              <CheckCircle size={16} />
+              {gps.lat.toFixed(5)}, {gps.lng.toFixed(5)}
+              <button onClick={() => setGps(null)} className="ml-auto text-gray-300"><X size={14} /></button>
+            </div>
+          ) : (
+            <button
+              onClick={captureGPS}
+              disabled={gpsLoading}
+              className="flex items-center gap-2 text-sm text-green-600 font-medium disabled:opacity-50"
+            >
+              <MapPin size={16} />
+              {gpsLoading ? "Capturing..." : "Capture GPS location"}
+            </button>
+          )}
+        </div>
+
+        {/* Notes */}
+        <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Notes (optional)</p>
+          <textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder="Delivery instructions, preferences..."
+            rows={3}
+            className="w-full text-sm outline-none resize-none text-gray-700 placeholder-gray-300"
+          />
+        </div>
+
+        {submitError && (
+          <div className="flex items-center gap-2 bg-red-50 border border-red-100 rounded-xl px-4 py-3 text-red-600 text-sm">
+            <AlertCircle size={16} />
+            {submitError}
+          </div>
+        )}
+      </div>
+
+      <div className="px-4 pb-4">
+        <button
+          onClick={handleSubmitOrder}
+          disabled={submitting}
+          className="w-full bg-green-600 text-white py-4 rounded-xl font-semibold shadow-sm active:bg-green-700 disabled:opacity-60 flex items-center justify-center gap-2"
+        >
+          {submitting ? (
+            <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Submitting...</>
+          ) : (
+            <><CheckCircle size={18} /> Place Order</>
+          )}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Orders List ──────────────────────────────────────────────────────────────
+
+function OrdersList({ orders, loading, onNew }: { orders: Order[]; loading: boolean; onNew: () => void }) {
+  const [expanded, setExpanded] = useState<string | null>(null);
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <div className="bg-green-600 px-4 pt-12 pb-4">
+        <h1 className="text-white text-xl font-bold">This Week&apos;s Orders</h1>
+        <p className="text-green-100 text-sm mt-0.5">{orders.length} order{orders.length !== 1 ? "s" : ""}</p>
+      </div>
+
+      <div className="px-4 py-3 space-y-2">
+        {loading && (
+          <div className="flex justify-center pt-8">
+            <div className="w-8 h-8 border-3 border-green-500 border-t-transparent rounded-full animate-spin" />
+          </div>
+        )}
+
+        {!loading && orders.length === 0 && (
+          <div className="text-center pt-12">
+            <ShoppingCart size={40} className="mx-auto text-gray-200 mb-3" />
+            <p className="text-gray-500 font-medium">No orders this week</p>
+            <p className="text-gray-400 text-sm mt-1">Tap below to create your first order</p>
+          </div>
+        )}
+
+        {orders.map((order) => (
+          <div key={order.id} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+            <button
+              onClick={() => setExpanded(expanded === order.id ? null : order.id)}
+              className="w-full px-4 py-3 text-left flex items-center gap-3"
+            >
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <p className="font-semibold text-gray-800 text-sm">{order.customer.name}</p>
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLOR[order.status] ?? "bg-gray-100 text-gray-600"}`}>
+                    {order.status}
+                  </span>
+                </div>
+                <p className="text-xs text-gray-400 mt-0.5">{order.orderNumber} · {order.customer.mobile}</p>
+              </div>
+              <div className="text-right shrink-0">
+                <p className="font-bold text-green-700 text-sm">₹{order.totalAmount.toLocaleString("en-IN")}</p>
+                <p className="text-xs text-gray-400">{order.items.length} item{order.items.length !== 1 ? "s" : ""}</p>
+              </div>
+            </button>
+
+            {expanded === order.id && (
+              <div className="border-t border-gray-100 px-4 py-3 bg-gray-50 space-y-1.5">
+                {order.items.map((item, i) => (
+                  <div key={i} className="flex justify-between text-sm">
+                    <span className="text-gray-600">{item.product.name} × {item.quantity}</span>
+                    <span className="text-gray-800 font-medium">₹{item.subtotal.toLocaleString("en-IN")}</span>
+                  </div>
+                ))}
+                {order.notes && (
+                  <p className="text-xs text-gray-400 pt-1 border-t border-gray-200 mt-2">Note: {order.notes}</p>
+                )}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      <div className="fixed bottom-20 right-4">
+        <button
+          onClick={onNew}
+          className="w-14 h-14 bg-green-600 text-white rounded-full shadow-lg flex items-center justify-center active:bg-green-700"
+        >
+          <Plus size={24} />
+        </button>
+      </div>
+    </div>
+  );
+}
