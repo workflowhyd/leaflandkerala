@@ -16,10 +16,15 @@ function getWeekRange() {
 }
 
 function generateOrderNumber(): string {
-  const now = new Date();
-  const ymd = now.toISOString().slice(0, 10).replace(/-/g, "");
-  const rand = Math.floor(1000 + Math.random() * 9000);
-  return `ORD-${ymd}-${rand}`;
+  const ymd = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+  return `ORD-${ymd}-${Math.floor(1000 + Math.random() * 9000)}`;
+}
+
+function fillTemplate(template: string, vars: Record<string, string>): string {
+  return Object.entries(vars).reduce(
+    (t, [k, v]) => t.replace(new RegExp(`{{${k}}}`, "g"), v),
+    template
+  );
 }
 
 export async function GET(request: NextRequest) {
@@ -42,20 +47,13 @@ export async function GET(request: NextRequest) {
   const orders = await prisma.order.findMany({
     where,
     select: {
-      id: true,
-      orderNumber: true,
-      status: true,
-      totalAmount: true,
-      notes: true,
-      deliveryDate: true,
-      createdAt: true,
+      id: true, orderNumber: true, status: true, totalAmount: true,
+      notes: true, deliveryDate: true, createdAt: true,
       customer: { select: { id: true, name: true, mobile: true, village: true } },
       items: {
         select: {
-          quantity: true,
-          price: true,
-          subtotal: true,
-          product: { select: { id: true, name: true, sku: true, imageUrl: true } },
+          quantity: true, price: true, subtotal: true,
+          product: { select: { id: true, name: true, sku: true, serialNumber: true, imageUrl: true } },
         },
       },
     },
@@ -88,29 +86,38 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "customerId and items are required" }, { status: 400 });
   }
 
-  // Verify customer belongs to this employee
   const customer = await prisma.customer.findFirst({
     where: { id: customerId, employeeId: employee.id },
   });
   if (!customer) return NextResponse.json({ error: "Customer not found" }, { status: 404 });
 
-  // Compute totals
-  const orderItems = items.map((item) => ({
-    productId: item.productId,
-    quantity: item.quantity,
-    price: item.price,
-    subtotal: item.price * item.quantity,
+  const orderItems = items.map((i) => ({
+    productId: i.productId,
+    quantity: i.quantity,
+    price: i.price,
+    subtotal: i.price * i.quantity,
   }));
-  const totalAmount = orderItems.reduce((sum, i) => sum + i.subtotal, 0);
+  const totalAmount = orderItems.reduce((s, i) => s + i.subtotal, 0);
 
-  // Delivery = next Sunday
   const now = new Date();
   const daysUntilSunday = (7 - now.getDay()) % 7 || 7;
   const deliveryDate = new Date(now);
   deliveryDate.setDate(now.getDate() + daysUntilSunday);
   deliveryDate.setHours(9, 0, 0, 0);
 
+  const deliveryDateStr = deliveryDate.toLocaleDateString("en-IN", {
+    weekday: "long", day: "numeric", month: "long", year: "numeric",
+  });
+
+  // Fetch WhatsApp template (non-blocking)
+  const [waSettings] = await Promise.all([
+    prisma.whatsAppSetting.findFirst({
+      select: { isEnabled: true, templateOrderPlaced: true },
+    }),
+  ]);
+
   const order = await prisma.$transaction(async (tx) => {
+    // Create order
     const created = await tx.order.create({
       data: {
         orderNumber: generateOrderNumber(),
@@ -122,12 +129,16 @@ export async function POST(request: NextRequest) {
         items: { create: orderItems },
       },
       include: {
-        items: { include: { product: { select: { name: true, sku: true } } } },
+        items: {
+          include: {
+            product: { select: { id: true, name: true, sku: true, serialNumber: true } },
+          },
+        },
         customer: { select: { name: true, mobile: true } },
       },
     });
 
-    // Create commission record
+    // Commission record
     await tx.commission.create({
       data: {
         employeeId: employee.id,
@@ -137,7 +148,36 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Store GPS if provided
+    // Reduce stock for each item
+    await Promise.all(
+      orderItems.map((item) =>
+        tx.product.update({
+          where: { id: item.productId },
+          data: { stock: { decrement: item.quantity } },
+        })
+      )
+    );
+
+    // Notification record
+    await tx.notification.create({
+      data: {
+        orderId: created.id,
+        type: "ORDER_PLACED",
+        recipient: customer.mobile,
+        message: fillTemplate(
+          waSettings?.templateOrderPlaced ??
+            "Hello {{Customer Name}}, your order {{Order Number}} has been placed. Delivery on {{Delivery Date}}.",
+          {
+            "Customer Name": customer.name,
+            "Order Number": created.orderNumber,
+            "Delivery Date": deliveryDateStr,
+          }
+        ),
+        isSent: false,
+      },
+    });
+
+    // GPS upsert
     if (latitude && longitude) {
       await tx.customerLocation.upsert({
         where: { customerId },
@@ -146,8 +186,71 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    // Customer status upgrade
+    if (customer.status === "LEAD" || customer.status === "VISITED" || customer.status === "INTERESTED") {
+      await tx.customer.update({
+        where: { id: customerId },
+        data: { status: "ORDER_PLACED" },
+      });
+    }
+
+    // Activity log
+    await tx.activityLog.create({
+      data: {
+        userId: session.userId,
+        customerId,
+        type: "ORDER_CREATE",
+        description: `Order ${created.orderNumber} created for ${customer.name} — ₹${totalAmount.toLocaleString("en-IN")}`,
+        metadata: {
+          orderId: created.id,
+          orderNumber: created.orderNumber,
+          totalAmount,
+          itemCount: orderItems.length,
+          employeeId: employee.id,
+          latitude,
+          longitude,
+        },
+      },
+    });
+
+    // GPS capture activity log
+    if (latitude && longitude) {
+      await tx.activityLog.create({
+        data: {
+          userId: session.userId,
+          customerId,
+          type: "CUSTOMER_VISIT",
+          description: `GPS captured at ${customer.name}'s location`,
+          metadata: { latitude, longitude, orderId: created.id },
+        },
+      });
+    }
+
     return created;
   });
 
-  return NextResponse.json(order, { status: 201 });
+  // Build WhatsApp click-to-chat URL
+  const whatsappMessage = fillTemplate(
+    waSettings?.templateOrderPlaced ??
+      "Hello {{Customer Name}},\n\nThank you for your order with LeafLand Kerala.\n\nOrder Number: {{Order Number}}\nExpected Delivery: {{Delivery Date}}\n\nOur team will contact you before delivery.\n\nThank you.",
+    {
+      "Customer Name": customer.name,
+      "Order Number": order.orderNumber,
+      "Delivery Date": deliveryDateStr,
+    }
+  );
+
+  const mobile = customer.mobile.replace(/\D/g, "");
+  const whatsappUrl = `https://wa.me/91${mobile}?text=${encodeURIComponent(whatsappMessage)}`;
+
+  return NextResponse.json(
+    {
+      ...order,
+      deliveryDate,
+      deliveryDateStr,
+      whatsappUrl,
+      whatsappMessage,
+    },
+    { status: 201 }
+  );
 }

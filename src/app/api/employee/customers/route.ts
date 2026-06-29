@@ -31,6 +31,7 @@ export async function GET(request: NextRequest) {
       id: true, name: true, mobile: true, address: true,
       village: true, district: true, pincode: true, status: true,
       interestedProduct: true,
+      location: { select: { latitude: true, longitude: true } },
     },
     take: 20,
     orderBy: { updatedAt: "desc" },

@@ -96,6 +96,7 @@ model Employee {
   fieldVisits       FieldVisit[]
   orders            Order[]
   commissions       Commission[]
+  locations         EmployeeLocation[]
 }
 
 model EmployeeDocument {
@@ -162,6 +163,10 @@ model Customer {
   fieldVisits  FieldVisit[]
   orders       Order[]
   activityLogs ActivityLog[]
+
+  @@index([employeeId])
+  @@index([mobile])
+  @@index([status])
 }
 
 model CustomerPhoto {
@@ -208,6 +213,7 @@ model Product {
   price         Float
   salePrice     Float?
   sku           String          @unique
+  serialNumber  Int             @unique @default(dbgenerated("nextval('product_serial_seq'::regclass)"))
   stock         Int             @default(0)
   imageUrl      String?
   imagePublicId String?
@@ -216,6 +222,10 @@ model Product {
   updatedAt     DateTime        @updatedAt
 
   orderItems OrderItem[]
+
+  @@index([name])
+  @@index([isActive])
+  @@index([category])
 }
 
 model Order {
@@ -238,6 +248,11 @@ model Order {
   tracking      OrderTracking[]
   notifications Notification[]
   commissions   Commission[]
+
+  @@index([employeeId])
+  @@index([customerId])
+  @@index([status])
+  @@index([createdAt])
 }
 
 model OrderItem {
@@ -318,6 +333,24 @@ model ActivityLog {
 
   user     User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
   customer Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([type])
+  @@index([createdAt])
+}
+
+model EmployeeLocation {
+  id         String   @id @default(cuid())
+  employeeId String
+  latitude   Float
+  longitude  Float
+  accuracy   Float?
+  capturedAt DateTime @default(now())
+
+  employee Employee @relation(fields: [employeeId], references: [id])
+
+  @@index([employeeId])
+  @@index([capturedAt])
 }
 
 model WhatsAppSetting {

@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useRef } from "react";
 import { Home, ShoppingCart, Users, User } from "lucide-react";
 import { CartProvider } from "@/components/employee/cart-context";
 
@@ -11,8 +12,44 @@ const NAV = [
   { href: "/employee/profile",   icon: User,          label: "Profile" },
 ];
 
+const LOCATION_INTERVAL_MS = 10 * 60 * 1000; // every 10 minutes
+
+function usePeriodicLocation() {
+  const lastSent = useRef<number>(0);
+
+  useEffect(() => {
+    if (!navigator.geolocation) return;
+
+    function sendLocation() {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const now = Date.now();
+          if (now - lastSent.current < 5 * 60 * 1000) return; // debounce 5 min
+          lastSent.current = now;
+          fetch("/api/employee/location", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              latitude: pos.coords.latitude,
+              longitude: pos.coords.longitude,
+              accuracy: pos.coords.accuracy,
+            }),
+          }).catch(() => {});
+        },
+        () => {},
+        { timeout: 8000, maximumAge: 5 * 60 * 1000 }
+      );
+    }
+
+    sendLocation();
+    const id = setInterval(sendLocation, LOCATION_INTERVAL_MS);
+    return () => clearInterval(id);
+  }, []);
+}
+
 export default function EmployeeLayout({ children }: { children: React.ReactNode }) {
   const path = usePathname();
+  usePeriodicLocation();
 
   return (
     <CartProvider>

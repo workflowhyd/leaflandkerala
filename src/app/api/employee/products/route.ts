@@ -8,29 +8,41 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const q = new URL(request.url).searchParams.get("q") ?? "";
+  const url = new URL(request.url);
+  const q = url.searchParams.get("q") ?? "";
+  const category = url.searchParams.get("category") ?? "";
+
+  // Check if query is purely numeric (serial number search)
+  const isSerial = /^\d{1,4}$/.test(q);
 
   const products = await prisma.product.findMany({
     where: {
       isActive: true,
-      ...(q.length > 0 && {
-        OR: [
-          { name: { contains: q, mode: "insensitive" } },
-          { sku: { contains: q, mode: "insensitive" } },
-        ],
+      ...(category && { category: category as never }),
+      ...(q && {
+        OR: isSerial
+          ? [
+              { serialNumber: { equals: parseInt(q) } },
+              { name: { contains: q, mode: "insensitive" } },
+            ]
+          : [
+              { name: { contains: q, mode: "insensitive" } },
+              { sku: { contains: q, mode: "insensitive" } },
+            ],
       }),
     },
     select: {
       id: true,
       name: true,
       sku: true,
+      serialNumber: true,
       price: true,
       salePrice: true,
       imageUrl: true,
       category: true,
     },
     take: 20,
-    orderBy: { name: "asc" },
+    orderBy: [{ serialNumber: "asc" }],
   });
 
   return NextResponse.json(products);

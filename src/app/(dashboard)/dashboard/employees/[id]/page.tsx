@@ -22,6 +22,8 @@ import {
   Percent,
   TrendingUp,
   Map,
+  Clock,
+  Navigation,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
@@ -39,7 +41,7 @@ import {
 import { CustomerStatusBadge } from "@/components/customers/customer-status-badge";
 import { formatDate, formatCurrency, getStatusLabel } from "@/lib/utils";
 
-type TabId = "overview" | "documents" | "performance" | "customers" | "pincodes";
+type TabId = "overview" | "documents" | "performance" | "customers" | "pincodes" | "timeline";
 
 interface Document {
   id: string;
@@ -71,6 +73,16 @@ interface Commission {
   amount: number;
 }
 
+interface TimelineEntry {
+  id: string;
+  time: string;
+  type: string;
+  label: string;
+  detail: string | null;
+  metadata: Record<string, unknown> | null;
+  source: string;
+}
+
 interface Employee {
   id: string;
   name: string;
@@ -94,6 +106,7 @@ const TABS: { id: TabId; label: string; icon: React.ElementType }[] = [
   { id: "performance", label: "Performance", icon: BarChart3 },
   { id: "customers", label: "Customers", icon: Users },
   { id: "pincodes", label: "Pincode Assignments", icon: Map },
+  { id: "timeline", label: "Activity Timeline", icon: Clock },
 ];
 
 const DOCUMENT_TYPE_OPTIONS = [
@@ -122,6 +135,10 @@ export default function EmployeeProfilePage() {
   const [editValue, setEditValue] = useState("");
   const [savingField, setSavingField] = useState(false);
 
+  // Timeline state
+  const [timeline, setTimeline] = useState<TimelineEntry[]>([]);
+  const [timelineLoading, setTimelineLoading] = useState(false);
+
   // Document upload state
   const [docType, setDocType] = useState("AADHAAR");
   const [docFile, setDocFile] = useState<File | null>(null);
@@ -145,6 +162,15 @@ export default function EmployeeProfilePage() {
   useEffect(() => {
     fetchEmployee();
   }, [fetchEmployee]);
+
+  useEffect(() => {
+    if (activeTab !== "timeline" || !id) return;
+    setTimelineLoading(true);
+    fetch(`/api/admin/employees/${id}/timeline`)
+      .then((r) => r.json())
+      .then((d) => setTimeline(d.timeline ?? []))
+      .finally(() => setTimelineLoading(false));
+  }, [activeTab, id]);
 
   const handleStartEdit = (field: string, currentValue: string) => {
     setEditingField(field);
@@ -691,6 +717,66 @@ export default function EmployeeProfilePage() {
                   ))}
                 </TableBody>
               </Table>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {activeTab === "timeline" && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Clock className="h-4 w-4 text-[#3B7A57]" />
+              Activity Timeline
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {timelineLoading ? (
+              <div className="flex justify-center py-8">
+                <div className="w-6 h-6 border-2 border-[#3B7A57] border-t-transparent rounded-full animate-spin" />
+              </div>
+            ) : timeline.length === 0 ? (
+              <p className="text-sm text-[#64748b]">No activity recorded yet.</p>
+            ) : (
+              <ol className="relative border-l border-gray-200 ml-3 space-y-6">
+                {timeline.map((entry) => {
+                  const time = new Date(entry.time);
+                  const timeStr = time.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
+                  const dateStr = time.toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+                  const isGPS = entry.type === "GPS_CAPTURE";
+                  const isOrder = entry.type === "ORDER_CREATE";
+                  const isLogin = entry.type === "LOGIN";
+                  const dotColor = isOrder ? "bg-green-500" : isLogin ? "bg-blue-500" : isGPS ? "bg-orange-400" : "bg-gray-300";
+
+                  return (
+                    <li key={entry.id} className="ml-6">
+                      <span className={`absolute -left-[9px] flex h-4 w-4 items-center justify-center rounded-full ring-2 ring-white ${dotColor}`} />
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-[#1a1a1a] leading-snug">{entry.label}</p>
+                          {entry.detail && (
+                            <p className="text-xs text-[#64748b] mt-0.5">{entry.detail}</p>
+                          )}
+                          {isGPS && !!entry.metadata?.latitude && (
+                            <a
+                              href={`https://www.google.com/maps/search/?api=1&query=${String(entry.metadata!.latitude)},${String(entry.metadata!.longitude)}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs text-blue-600 flex items-center gap-1 mt-1"
+                            >
+                              <Navigation className="h-3 w-3" /> Open in Maps
+                            </a>
+                          )}
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className="text-xs font-medium text-[#1a1a1a]">{timeStr}</p>
+                          <p className="text-xs text-[#94a3b8]">{dateStr}</p>
+                        </div>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ol>
             )}
           </CardContent>
         </Card>
