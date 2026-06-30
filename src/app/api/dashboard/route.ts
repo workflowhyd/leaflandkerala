@@ -20,7 +20,6 @@ export async function GET(_request: NextRequest) {
 
   const sixMonthsAgo = new Date();
   sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
-
   const thirtyDaysFromNow = new Date();
   thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
   const sixMonthsFromThirty = new Date(thirtyDaysFromNow);
@@ -29,6 +28,7 @@ export async function GET(_request: NextRequest) {
   const [
     totalRevenue,
     lastMonthRevenue,
+    thisMonthRevenue,
     totalOrders,
     pendingOrders,
     activeCustomers,
@@ -38,22 +38,15 @@ export async function GET(_request: NextRequest) {
     monthlyRevenue,
     ordersByStatus,
     sundayDeliveries,
+    eligibleCount,
+    upcomingAnniversaries,
+    activeOffersCount,
   ] = await Promise.all([
-    prisma.order.aggregate({
-      _sum: { totalAmount: true },
-      where: { status: "DELIVERED" },
-    }),
-    prisma.order.aggregate({
-      _sum: { totalAmount: true },
-      where: {
-        status: "DELIVERED",
-        createdAt: { gte: startOfLastMonth, lte: endOfLastMonth },
-      },
-    }),
+    prisma.order.aggregate({ _sum: { totalAmount: true }, where: { status: "DELIVERED" } }),
+    prisma.order.aggregate({ _sum: { totalAmount: true }, where: { status: "DELIVERED", createdAt: { gte: startOfLastMonth, lte: endOfLastMonth } } }),
+    prisma.order.aggregate({ _sum: { totalAmount: true }, where: { status: "DELIVERED", createdAt: { gte: startOfMonth } } }),
     prisma.order.count(),
-    prisma.order.count({
-      where: { status: { in: ["NEW", "CONFIRMED", "PROCESSING", "PACKED", "OUT_FOR_DELIVERY"] } },
-    }),
+    prisma.order.count({ where: { status: { in: ["NEW", "CONFIRMED", "PROCESSING", "PACKED", "OUT_FOR_DELIVERY"] } } }),
     prisma.customer.count({ where: { status: "ACTIVE" } }),
     prisma.product.count({ where: { stock: { lt: 10 }, isActive: true } }),
     prisma.order.findMany({
@@ -68,8 +61,7 @@ export async function GET(_request: NextRequest) {
       take: 5,
       include: {
         commissions: { select: { amount: true } },
-        orders: { select: { id: true } },
-        customers: { select: { id: true } },
+        _count: { select: { orders: true, customers: true } },
       },
     }),
     prisma.$queryRaw<{ month: string; revenue: number }[]>`
@@ -81,15 +73,9 @@ export async function GET(_request: NextRequest) {
       GROUP BY DATE_TRUNC('month', "createdAt")
       ORDER BY DATE_TRUNC('month', "createdAt")
     `,
-    prisma.order.groupBy({
-      by: ["status"],
-      _count: { status: true },
-    }),
+    prisma.order.groupBy({ by: ["status"], _count: { status: true } }),
     prisma.order.findMany({
-      where: {
-        deliveryDate: { gte: upcomingSunday, lte: upcomingSundayEnd },
-        status: { notIn: ["DELIVERED", "CANCELLED"] },
-      },
+      where: { deliveryDate: { gte: upcomingSunday, lte: upcomingSundayEnd }, status: { notIn: ["DELIVERED", "CANCELLED"] } },
       include: {
         customer: { select: { name: true, mobile: true, village: true } },
         employee: { select: { name: true } },
@@ -97,47 +83,29 @@ export async function GET(_request: NextRequest) {
       },
       orderBy: { totalAmount: "desc" },
     }),
-  ]);
-
-  const [eligibleCount, upcomingAnniversaries, activeOffersCount] = await Promise.all([
-    prisma.employee.count({
-      where: { createdAt: { lte: sixMonthsAgo }, isActive: true },
-    }),
+    prisma.employee.count({ where: { createdAt: { lte: sixMonthsAgo }, isActive: true } }),
     prisma.employee.findMany({
-      where: {
-        isActive: true,
-        createdAt: { gte: sixMonthsFromThirty, lte: sixMonthsAgo },
-      },
+      where: { isActive: true, createdAt: { gte: sixMonthsFromThirty, lte: sixMonthsAgo } },
       select: { id: true, name: true, createdAt: true },
       take: 5,
     }),
     prisma.offer.count({ where: { isActive: true } }),
   ]);
 
-  const thisMonthRevenue = await prisma.order.aggregate({
-    _sum: { totalAmount: true },
-    where: {
-      status: "DELIVERED",
-      createdAt: { gte: startOfMonth },
-    },
-  });
-
   const revenueChange = lastMonthRevenue._sum.totalAmount
-    ? (((thisMonthRevenue._sum.totalAmount || 0) - lastMonthRevenue._sum.totalAmount) /
-        lastMonthRevenue._sum.totalAmount) *
-      100
+    ? (((thisMonthRevenue._sum.totalAmount || 0) - lastMonthRevenue._sum.totalAmount) / lastMonthRevenue._sum.totalAmount) * 100
     : 0;
 
-  const topEmployeesFormatted = topEmployees.map((emp) => ({
+  const topEmployeesFormatted = topEmployees.map((emp: typeof topEmployees[number]) => ({
     id: emp.id,
     name: emp.name,
     totalRevenue: emp.commissions.reduce((sum: number, c: { amount: number }) => sum + c.amount, 0),
-    ordersCount: emp.orders.length,
-    customersCount: emp.customers.length,
+    ordersCount: emp._count.orders,
+    customersCount: emp._count.customers,
     commission: emp.commissions.reduce((sum: number, c: { amount: number }) => sum + c.amount, 0),
   }));
 
-  const upcomingAnniversariesFormatted = upcomingAnniversaries.map((emp) => {
+  const upcomingAnniversariesFormatted = upcomingAnniversaries.map((emp: { id: string; name: string; createdAt: Date }) => {
     const joinDate = new Date(emp.createdAt);
     const sixMonthMark = new Date(joinDate);
     sixMonthMark.setMonth(sixMonthMark.getMonth() + 6);

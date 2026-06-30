@@ -11,15 +11,16 @@ export interface SessionPayload {
 
 export async function getSession(): Promise<SessionPayload | null> {
   const supabase = await createSupabaseServerClient();
+  // getSession() reads the JWT from the cookie locally — no network call.
+  // The middleware already validated the token with getUser() before this runs.
   const {
-    data: { user },
-    error,
-  } = await supabase.auth.getUser();
+    data: { session },
+  } = await supabase.auth.getSession();
 
-  if (error || !user) return null;
+  if (!session?.user) return null;
 
   const profile = await prisma.user.findUnique({
-    where: { id: user.id },
+    where: { id: session.user.id },
     include: { employee: { select: { id: true } } },
   });
 
@@ -27,7 +28,7 @@ export async function getSession(): Promise<SessionPayload | null> {
 
   return {
     userId: profile.id,
-    email: user.email ?? profile.email,
+    email: session.user.email ?? profile.email,
     name: profile.name,
     role: profile.role as "ADMIN" | "EMPLOYEE",
     employeeId: profile.employee?.id,

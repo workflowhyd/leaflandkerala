@@ -105,13 +105,13 @@ export function DashboardClientShell({
           >
             {/* Backdrop */}
             <div
-              className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity"
+              className="absolute inset-0 bg-black/50"
               onClick={() => setMobileMenuOpen(false)}
             />
             {/* Drawer panel */}
             <div
               className="absolute left-0 top-0 h-full w-64 shadow-2xl"
-              style={{ animation: "slideInLeft 0.25s ease-out" }}
+              style={{}}
             >
               <Sidebar
                 userRole={session.role}

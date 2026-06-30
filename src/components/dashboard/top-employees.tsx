@@ -31,7 +31,7 @@ export function TopEmployees({ employees }: TopEmployeesProps) {
       {employees.map((emp, index) => (
         <div
           key={emp.id}
-          className="flex items-center gap-4 rounded-xl border border-[#e2e8f0] bg-[#fafafa] px-4 py-3 transition-all hover:border-[#1E4D3D]/20 hover:bg-[#1E4D3D]/[0.03]"
+          className="flex items-center gap-4 rounded-xl border border-[#e2e8f0] bg-[#fafafa] px-4 py-3"
         >
           {/* Rank badge */}
           <div

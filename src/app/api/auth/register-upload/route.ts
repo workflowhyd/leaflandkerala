@@ -1,13 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
-import { uploadImage } from "@/lib/cloudinary";
+import { uploadRegistrationImage } from "@/lib/supabase/storage";
 
 export async function POST(request: NextRequest) {
-  const body = await request.json();
+  let body: { imageData?: string };
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+  }
+
   const { imageData } = body;
   if (!imageData || !imageData.startsWith("data:image/")) {
     return NextResponse.json({ error: "Invalid image data" }, { status: 400 });
   }
-  // Only allow jpg, png, webp
+
   const allowed = ["data:image/jpeg", "data:image/png", "data:image/webp"];
   if (!allowed.some((t) => imageData.startsWith(t))) {
     return NextResponse.json(
@@ -15,7 +21,7 @@ export async function POST(request: NextRequest) {
       { status: 400 }
     );
   }
-  // Check approximate size (base64 * 0.75 = bytes)
+
   const approxBytes = imageData.length * 0.75;
   if (approxBytes > 550_000) {
     return NextResponse.json(
@@ -23,6 +29,15 @@ export async function POST(request: NextRequest) {
       { status: 400 }
     );
   }
-  const { url, publicId } = await uploadImage(imageData, "registrations");
-  return NextResponse.json({ url, publicId });
+
+  try {
+    const { url, path } = await uploadRegistrationImage(imageData);
+    return NextResponse.json({ url, publicId: path });
+  } catch (err) {
+    console.error("[register-upload] Storage error:", err);
+    return NextResponse.json(
+      { error: "Image upload failed. Please try again." },
+      { status: 500 }
+    );
+  }
 }

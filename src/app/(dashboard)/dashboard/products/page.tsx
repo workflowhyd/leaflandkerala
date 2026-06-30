@@ -398,7 +398,7 @@ export default function ProductsPage() {
           {products.map((product) => (
             <Card
               key={product.id}
-              className="group overflow-hidden transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
+              className="overflow-hidden"
             >
               <div className="relative h-40 w-full overflow-hidden">
                 <ProductImage
@@ -406,7 +406,7 @@ export default function ProductsPage() {
                   name={product.name}
                   category={product.category}
                   containerClass="h-40 w-full"
-                  imgClass="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                  imgClass="h-full w-full object-cover"
                   emojiClass="text-5xl"
                 />
                 {!product.isActive && (

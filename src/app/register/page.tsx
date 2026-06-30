@@ -139,7 +139,13 @@ export default function RegisterPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ imageData: compressedImage }),
       });
-      const uploadData = await uploadRes.json();
+      let uploadData: { url?: string; publicId?: string; error?: string } = {};
+      try {
+        uploadData = await uploadRes.json();
+      } catch {
+        setError("Image upload failed. Please try again.");
+        return;
+      }
       if (!uploadRes.ok) {
         setError(uploadData.error || "Image upload failed.");
         return;
@@ -162,7 +168,13 @@ export default function RegisterPage() {
           governmentIdPublicId,
         }),
       });
-      const regData = await regRes.json();
+      let regData: { id?: string; error?: string } = {};
+      try {
+        regData = await regRes.json();
+      } catch {
+        setError("Registration failed. Please try again.");
+        return;
+      }
       if (!regRes.ok) {
         setError(regData.error || "Registration failed. Please try again.");
         return;

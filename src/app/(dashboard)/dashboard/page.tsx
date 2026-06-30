@@ -15,23 +15,142 @@ import {
   Trophy,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
-import { cookies } from "next/headers";
+import { prisma } from "@/lib/prisma";
+import { getSession } from "@/lib/auth";
 
 async function getDashboardData() {
   try {
-    const cookieStore = await cookies();
-    const cookieHeader = cookieStore.toString();
+    const session = await getSession();
+    if (!session) return null;
 
-    const res = await fetch(
-      `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/api/dashboard`,
-      {
-        headers: { Cookie: cookieHeader },
-        cache: "no-store",
-      }
-    );
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0);
 
-    if (!res.ok) return null;
-    return res.json();
+    const daysUntilSunday = (7 - now.getDay()) % 7 || 7;
+    const upcomingSunday = new Date(now);
+    upcomingSunday.setDate(now.getDate() + daysUntilSunday);
+    upcomingSunday.setHours(0, 0, 0, 0);
+    const upcomingSundayEnd = new Date(upcomingSunday);
+    upcomingSundayEnd.setHours(23, 59, 59, 999);
+
+    const sixMonthsAgo = new Date();
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+    const thirtyDaysFromNow = new Date();
+    thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
+    const sixMonthsFromThirty = new Date(thirtyDaysFromNow);
+    sixMonthsFromThirty.setMonth(sixMonthsFromThirty.getMonth() - 6);
+
+    const [
+      totalRevenue,
+      lastMonthRevenue,
+      thisMonthRevenue,
+      totalOrders,
+      pendingOrders,
+      activeCustomers,
+      lowStockProducts,
+      recentOrders,
+      topEmployees,
+      monthlyRevenue,
+      ordersByStatus,
+      sundayDeliveries,
+      eligibleCount,
+      upcomingAnniversaries,
+      activeOffersCount,
+    ] = await Promise.all([
+      prisma.order.aggregate({ _sum: { totalAmount: true }, where: { status: "DELIVERED" } }),
+      prisma.order.aggregate({ _sum: { totalAmount: true }, where: { status: "DELIVERED", createdAt: { gte: startOfLastMonth, lte: endOfLastMonth } } }),
+      prisma.order.aggregate({ _sum: { totalAmount: true }, where: { status: "DELIVERED", createdAt: { gte: startOfMonth } } }),
+      prisma.order.count(),
+      prisma.order.count({ where: { status: { in: ["NEW", "CONFIRMED", "PROCESSING", "PACKED", "OUT_FOR_DELIVERY"] } } }),
+      prisma.customer.count({ where: { status: "ACTIVE" } }),
+      prisma.product.count({ where: { stock: { lt: 10 }, isActive: true } }),
+      prisma.order.findMany({
+        take: 10,
+        orderBy: { createdAt: "desc" },
+        include: {
+          customer: { select: { name: true, mobile: true } },
+          employee: { select: { name: true } },
+        },
+      }),
+      prisma.employee.findMany({
+        take: 5,
+        include: {
+          commissions: { select: { amount: true } },
+          _count: { select: { orders: true, customers: true } },
+        },
+      }),
+      prisma.$queryRaw<{ month: string; revenue: number }[]>`
+        SELECT TO_CHAR(DATE_TRUNC('month', "createdAt"), 'Mon') as month,
+               SUM("totalAmount") as revenue
+        FROM "Order"
+        WHERE "status" = 'DELIVERED'
+          AND "createdAt" >= NOW() - INTERVAL '6 months'
+        GROUP BY DATE_TRUNC('month', "createdAt")
+        ORDER BY DATE_TRUNC('month', "createdAt")
+      `,
+      prisma.order.groupBy({ by: ["status"], _count: { status: true } }),
+      prisma.order.findMany({
+        where: { deliveryDate: { gte: upcomingSunday, lte: upcomingSundayEnd }, status: { notIn: ["DELIVERED", "CANCELLED"] } },
+        include: {
+          customer: { select: { name: true, mobile: true, village: true } },
+          employee: { select: { name: true } },
+          items: { select: { quantity: true, subtotal: true } },
+        },
+        orderBy: { totalAmount: "desc" },
+      }),
+      prisma.employee.count({ where: { createdAt: { lte: sixMonthsAgo }, isActive: true } }),
+      prisma.employee.findMany({
+        where: { isActive: true, createdAt: { gte: sixMonthsFromThirty, lte: sixMonthsAgo } },
+        select: { id: true, name: true, createdAt: true },
+        take: 5,
+      }),
+      prisma.offer.count({ where: { isActive: true } }),
+    ]);
+
+    const revenueChange = lastMonthRevenue._sum.totalAmount
+      ? (((thisMonthRevenue._sum.totalAmount || 0) - lastMonthRevenue._sum.totalAmount) / lastMonthRevenue._sum.totalAmount) * 100
+      : 0;
+
+    const topEmployeesFormatted = topEmployees.map((emp) => ({
+      id: emp.id,
+      name: emp.name,
+      totalRevenue: emp.commissions.reduce((sum: number, c: { amount: number }) => sum + c.amount, 0),
+      ordersCount: emp._count.orders,
+      customersCount: emp._count.customers,
+      commission: emp.commissions.reduce((sum: number, c: { amount: number }) => sum + c.amount, 0),
+    }));
+
+    const upcomingAnniversariesFormatted = upcomingAnniversaries.map((emp) => {
+      const joinDate = new Date(emp.createdAt);
+      const sixMonthMark = new Date(joinDate);
+      sixMonthMark.setMonth(sixMonthMark.getMonth() + 6);
+      const daysUntil = Math.ceil((sixMonthMark.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+      return { id: emp.id, name: emp.name, daysUntil };
+    });
+
+    return {
+      stats: {
+        totalRevenue: totalRevenue._sum.totalAmount || 0,
+        revenueChange: revenueChange.toFixed(1),
+        totalOrders,
+        pendingOrders,
+        activeCustomers,
+        lowStockProducts,
+      },
+      recentOrders,
+      topEmployees: topEmployeesFormatted,
+      monthlyRevenue,
+      ordersByStatus,
+      sundayDeliveries,
+      upcomingSunday,
+      rewards: {
+        eligibleCount,
+        upcomingAnniversaries: upcomingAnniversariesFormatted,
+        activeOffersCount,
+      },
+    };
   } catch {
     return null;
   }
@@ -55,7 +174,7 @@ export default async function DashboardPage() {
   const topEmployees = data?.topEmployees ?? [];
 
   const sundayDeliveries = data?.sundayDeliveries ?? [];
-  const upcomingSunday: string | undefined = data?.upcomingSunday;
+  const upcomingSunday: Date | undefined = data?.upcomingSunday;
 
   const rewards = data?.rewards ?? { eligibleCount: 0, upcomingAnniversaries: [], activeOffersCount: 0 };
   const upcomingAnniversaries: { id: string; name: string; daysUntil: number }[] = rewards.upcomingAnniversaries ?? [];
