@@ -18,6 +18,14 @@ export async function GET(_request: NextRequest) {
   const upcomingSundayEnd = new Date(upcomingSunday);
   upcomingSundayEnd.setHours(23, 59, 59, 999);
 
+  const sixMonthsAgo = new Date();
+  sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+
+  const thirtyDaysFromNow = new Date();
+  thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
+  const sixMonthsFromThirty = new Date(thirtyDaysFromNow);
+  sixMonthsFromThirty.setMonth(sixMonthsFromThirty.getMonth() - 6);
+
   const [
     totalRevenue,
     lastMonthRevenue,
@@ -91,6 +99,21 @@ export async function GET(_request: NextRequest) {
     }),
   ]);
 
+  const [eligibleCount, upcomingAnniversaries, activeOffersCount] = await Promise.all([
+    prisma.employee.count({
+      where: { createdAt: { lte: sixMonthsAgo }, isActive: true },
+    }),
+    prisma.employee.findMany({
+      where: {
+        isActive: true,
+        createdAt: { gte: sixMonthsFromThirty, lte: sixMonthsAgo },
+      },
+      select: { id: true, name: true, createdAt: true },
+      take: 5,
+    }),
+    prisma.offer.count({ where: { isActive: true } }),
+  ]);
+
   const thisMonthRevenue = await prisma.order.aggregate({
     _sum: { totalAmount: true },
     where: {
@@ -108,11 +131,19 @@ export async function GET(_request: NextRequest) {
   const topEmployeesFormatted = topEmployees.map((emp) => ({
     id: emp.id,
     name: emp.name,
-    totalRevenue: emp.commissions.reduce((sum, c) => sum + c.amount, 0),
+    totalRevenue: emp.commissions.reduce((sum: number, c: { amount: number }) => sum + c.amount, 0),
     ordersCount: emp.orders.length,
     customersCount: emp.customers.length,
-    commission: emp.commissions.reduce((sum, c) => sum + c.amount, 0),
+    commission: emp.commissions.reduce((sum: number, c: { amount: number }) => sum + c.amount, 0),
   }));
+
+  const upcomingAnniversariesFormatted = upcomingAnniversaries.map((emp) => {
+    const joinDate = new Date(emp.createdAt);
+    const sixMonthMark = new Date(joinDate);
+    sixMonthMark.setMonth(sixMonthMark.getMonth() + 6);
+    const daysUntil = Math.ceil((sixMonthMark.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+    return { id: emp.id, name: emp.name, daysUntil };
+  });
 
   return NextResponse.json({
     stats: {
@@ -129,5 +160,10 @@ export async function GET(_request: NextRequest) {
     ordersByStatus,
     sundayDeliveries,
     upcomingSunday,
+    rewards: {
+      eligibleCount,
+      upcomingAnniversaries: upcomingAnniversariesFormatted,
+      activeOffersCount,
+    },
   });
 }

@@ -12,6 +12,7 @@ import {
   Users,
   TrendingUp,
   CalendarCheck,
+  Trophy,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { cookies } from "next/headers";
@@ -55,6 +56,9 @@ export default async function DashboardPage() {
 
   const sundayDeliveries = data?.sundayDeliveries ?? [];
   const upcomingSunday: string | undefined = data?.upcomingSunday;
+
+  const rewards = data?.rewards ?? { eligibleCount: 0, upcomingAnniversaries: [], activeOffersCount: 0 };
+  const upcomingAnniversaries: { id: string; name: string; daysUntil: number }[] = rewards.upcomingAnniversaries ?? [];
   const sundayLabel = upcomingSunday
     ? new Date(upcomingSunday).toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long" })
     : "this Sunday";
@@ -196,6 +200,58 @@ export default async function DashboardPage() {
                 </div>
               ))}
             </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Employee Rewards */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Trophy className="h-5 w-5 text-amber-500" />
+              <div>
+                <CardTitle>Employee Rewards</CardTitle>
+                <p className="mt-0.5 text-sm text-[#64748b]">6-month bonus eligibility &amp; active campaigns</p>
+              </div>
+            </div>
+            <a href="/dashboard/settings?tab=offers" className="text-xs font-semibold text-[#3B7A57] hover:underline">Manage offers</a>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-wrap gap-4 mb-4">
+            <div className="rounded-lg bg-amber-50 border border-amber-100 px-4 py-3 flex items-center gap-3">
+              <Trophy className="h-5 w-5 text-amber-500 flex-shrink-0" />
+              <div>
+                <p className="text-xl font-bold text-amber-700">{rewards.eligibleCount}</p>
+                <p className="text-xs text-amber-600">eligible for 6-Month Bonus</p>
+              </div>
+            </div>
+            <div className="rounded-lg bg-[#1E4D3D]/5 border border-[#1E4D3D]/10 px-4 py-3 flex items-center gap-3">
+              <span className="text-xl">🎁</span>
+              <div>
+                <p className="text-xl font-bold text-[#1E4D3D]">{rewards.activeOffersCount}</p>
+                <p className="text-xs text-[#1E4D3D]/70">active reward campaigns</p>
+              </div>
+            </div>
+          </div>
+          {upcomingAnniversaries.length > 0 && (
+            <div>
+              <p className="text-xs font-semibold text-[#64748b] uppercase tracking-wide mb-2">Upcoming 6-Month Anniversaries</p>
+              <div className="flex flex-col gap-1">
+                {upcomingAnniversaries.map((emp) => (
+                  <div key={emp.id} className="flex items-center justify-between text-sm py-1.5 border-b border-[#f1f5f9] last:border-0">
+                    <span className="font-medium text-[#1a1a1a]">{emp.name}</span>
+                    <span className="text-xs text-amber-600 font-medium">
+                      {emp.daysUntil <= 0 ? "Today!" : `${emp.daysUntil} day${emp.daysUntil !== 1 ? "s" : ""} until 6-month mark`}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {upcomingAnniversaries.length === 0 && (
+            <p className="text-sm text-[#64748b]">No upcoming 6-month anniversaries in the next 30 days.</p>
           )}
         </CardContent>
       </Card>

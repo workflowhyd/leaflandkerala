@@ -1,20 +1,22 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { Building2, MessageSquare, Percent, MapPin, Plus, Trash2, ToggleLeft, ToggleRight, Upload } from "lucide-react";
+import { Building2, MessageSquare, Percent, MapPin, Plus, Trash2, ToggleLeft, ToggleRight, Upload, Gift, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
+import { Modal } from "@/components/ui/modal";
 
-type TabId = "company" | "whatsapp" | "commission" | "pincodes";
+type TabId = "company" | "whatsapp" | "commission" | "pincodes" | "offers";
 
 const TABS: { id: TabId; label: string; shortLabel: string; icon: React.FC<{ className?: string }> }[] = [
   { id: "company", label: "Company Info", shortLabel: "Company", icon: Building2 },
   { id: "whatsapp", label: "WhatsApp", shortLabel: "WhatsApp", icon: MessageSquare },
   { id: "commission", label: "Commission", shortLabel: "Commission", icon: Percent },
   { id: "pincodes", label: "Pincodes", shortLabel: "Pincodes", icon: MapPin },
+  { id: "offers", label: "Offers & Rewards", shortLabel: "Offers", icon: Gift },
 ];
 
 interface CompanyInfo {
@@ -55,6 +57,49 @@ interface Pincode {
   isActive: boolean;
   _count?: { customers: number };
 }
+
+interface Offer {
+  id: string;
+  title: string;
+  description: string;
+  bannerImage: string | null;
+  offerType: string;
+  startDate: string;
+  endDate: string | null;
+  targetGroup: string;
+  isActive: boolean;
+  createdAt: string;
+  _count?: { rewards: number };
+}
+
+const OFFER_TYPE_LABELS: Record<string, string> = {
+  SIX_MONTHS_BONUS: "6-Month Bonus",
+  BEST_PERFORMER: "Best Performer",
+  MONTHLY_INCENTIVE: "Monthly Incentive",
+  FESTIVAL_BONUS: "Festival Bonus",
+  REFERRAL_BONUS: "Referral Bonus",
+  CUSTOM: "Custom",
+};
+
+const OFFER_TYPE_COLORS: Record<string, string> = {
+  SIX_MONTHS_BONUS: "bg-amber-100 text-amber-800",
+  BEST_PERFORMER: "bg-purple-100 text-purple-800",
+  MONTHLY_INCENTIVE: "bg-blue-100 text-blue-800",
+  FESTIVAL_BONUS: "bg-pink-100 text-pink-800",
+  REFERRAL_BONUS: "bg-cyan-100 text-cyan-800",
+  CUSTOM: "bg-gray-100 text-gray-700",
+};
+
+const EMPTY_OFFER_FORM = {
+  title: "",
+  description: "",
+  bannerImage: "",
+  offerType: "CUSTOM",
+  startDate: new Date().toISOString().split("T")[0],
+  endDate: "",
+  targetGroup: "ALL",
+  isActive: true,
+};
 
 function DeletePincodeModal({
   open,
@@ -110,9 +155,23 @@ export default function SettingsPage() {
   const [deleteLoading, setDeleteLoading] = useState(false);
   const logoInputRef = useRef<HTMLInputElement>(null);
 
+  // Offers state
+  const [offers, setOffers] = useState<Offer[]>([]);
+  const [offerLoading, setOfferLoading] = useState(false);
+  const [showOfferModal, setShowOfferModal] = useState(false);
+  const [editOffer, setEditOffer] = useState<Offer | null>(null);
+  const [offerForm, setOfferForm] = useState(EMPTY_OFFER_FORM);
+  const [deleteOfferTarget, setDeleteOfferTarget] = useState<Offer | null>(null);
+  const [deleteOfferLoading, setDeleteOfferLoading] = useState(false);
+
   const fetchPincodes = async () => {
     const res = await fetch("/api/pincodes");
     if (res.ok) setPincodes(await res.json());
+  };
+
+  const fetchOffers = async () => {
+    const res = await fetch("/api/admin/offers");
+    if (res.ok) setOffers(await res.json());
   };
 
   useEffect(() => {
@@ -122,6 +181,7 @@ export default function SettingsPage() {
       if (data.commission) setCommission({ defaultPercentage: data.commission.defaultPercentage, minPercentage: data.commission.minPercentage, maxPercentage: data.commission.maxPercentage });
     });
     fetchPincodes();
+    fetchOffers();
   }, []);
 
   const showSaved = (msg = "Settings saved successfully.") => {
@@ -190,6 +250,74 @@ export default function SettingsPage() {
     setDeleteLoading(false);
     setDeletePin(null);
     fetchPincodes();
+  };
+
+  // Offer handlers
+  const openNewOffer = () => {
+    setEditOffer(null);
+    setOfferForm(EMPTY_OFFER_FORM);
+    setShowOfferModal(true);
+  };
+
+  const openEditOffer = (offer: Offer) => {
+    setEditOffer(offer);
+    setOfferForm({
+      title: offer.title,
+      description: offer.description,
+      bannerImage: offer.bannerImage || "",
+      offerType: offer.offerType,
+      startDate: offer.startDate.split("T")[0],
+      endDate: offer.endDate ? offer.endDate.split("T")[0] : "",
+      targetGroup: offer.targetGroup,
+      isActive: offer.isActive,
+    });
+    setShowOfferModal(true);
+  };
+
+  const saveOffer = async () => {
+    if (!offerForm.title || !offerForm.description || !offerForm.offerType) return;
+    setOfferLoading(true);
+    const payload = {
+      title: offerForm.title,
+      description: offerForm.description,
+      bannerImage: offerForm.bannerImage || null,
+      offerType: offerForm.offerType,
+      startDate: offerForm.startDate,
+      endDate: offerForm.endDate || null,
+      targetGroup: offerForm.targetGroup,
+      isActive: offerForm.isActive,
+    };
+    const url = editOffer ? `/api/admin/offers/${editOffer.id}` : "/api/admin/offers";
+    const method = editOffer ? "PATCH" : "POST";
+    const res = await fetch(url, {
+      method,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    setOfferLoading(false);
+    if (res.ok) {
+      setShowOfferModal(false);
+      fetchOffers();
+      showSaved(editOffer ? "Offer updated." : "Offer created.");
+    }
+  };
+
+  const toggleOfferStatus = async (offer: Offer) => {
+    await fetch(`/api/admin/offers/${offer.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ isActive: !offer.isActive }),
+    });
+    fetchOffers();
+  };
+
+  const handleDeleteOffer = async () => {
+    if (!deleteOfferTarget) return;
+    setDeleteOfferLoading(true);
+    await fetch(`/api/admin/offers/${deleteOfferTarget.id}`, { method: "DELETE" });
+    setDeleteOfferLoading(false);
+    setDeleteOfferTarget(null);
+    fetchOffers();
   };
 
   return (
@@ -506,6 +634,83 @@ export default function SettingsPage() {
         </div>
       )}
 
+      {activeTab === "offers" && (
+        <div className="flex flex-col gap-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-base font-semibold text-[#1a1a1a]">Offers &amp; Rewards</h2>
+              <p className="text-sm text-[#64748b]">Manage reward campaigns for employees</p>
+            </div>
+            <Button onClick={openNewOffer}>
+              <Plus className="h-4 w-4" /> Add Offer
+            </Button>
+          </div>
+
+          {offers.length === 0 ? (
+            <Card>
+              <CardContent className="py-12 text-center">
+                <Gift className="h-10 w-10 text-[#e2e8f0] mx-auto mb-3" />
+                <p className="text-sm text-[#64748b]">No offers yet. Create one to reward your employees.</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              {offers.map((offer) => (
+                <div key={offer.id} className="rounded-xl border border-[#e2e8f0] bg-white p-4 shadow-sm flex flex-col gap-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold mb-1 ${OFFER_TYPE_COLORS[offer.offerType] ?? "bg-gray-100 text-gray-700"}`}>
+                        {OFFER_TYPE_LABELS[offer.offerType] ?? offer.offerType}
+                      </span>
+                      <h3 className="font-semibold text-[#1a1a1a] text-sm leading-tight">{offer.title}</h3>
+                    </div>
+                    <span className={`flex-shrink-0 inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ${offer.isActive ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-600"}`}>
+                      {offer.isActive ? "Active" : "Inactive"}
+                    </span>
+                  </div>
+
+                  <p className="text-xs text-[#64748b] line-clamp-2">{offer.description}</p>
+
+                  <div className="text-xs text-[#64748b] space-y-0.5">
+                    <p>From: {new Date(offer.startDate).toLocaleDateString("en-IN")}</p>
+                    {offer.endDate && <p>Until: {new Date(offer.endDate).toLocaleDateString("en-IN")}</p>}
+                    <p>Target: {offer.targetGroup === "ALL" ? "All Employees" : "Active Only"}</p>
+                    {offer._count !== undefined && <p>{offer._count.rewards} reward{offer._count.rewards !== 1 ? "s" : ""} assigned</p>}
+                  </div>
+
+                  <div className="flex items-center gap-2 pt-1 border-t border-[#f1f5f9]">
+                    <button
+                      type="button"
+                      onClick={() => toggleOfferStatus(offer)}
+                      className="text-[#1E4D3D]"
+                      title={offer.isActive ? "Deactivate" : "Activate"}
+                    >
+                      {offer.isActive ? <ToggleRight className="h-5 w-5" /> : <ToggleLeft className="h-5 w-5 text-[#64748b]" />}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => openEditOffer(offer)}
+                      className="text-[#64748b] hover:text-[#1a1a1a] ml-1"
+                      title="Edit"
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDeleteOfferTarget(offer)}
+                      className="text-[#D32F2F] hover:text-[#B71C1C] ml-auto"
+                      title="Delete"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       <DeletePincodeModal
         open={!!deletePin}
         pincode={deletePin}
@@ -513,6 +718,121 @@ export default function SettingsPage() {
         onConfirm={handleDeletePincode}
         onCancel={() => setDeletePin(null)}
       />
+
+      {/* Offer Add/Edit Modal */}
+      <Modal
+        open={showOfferModal}
+        onClose={() => setShowOfferModal(false)}
+        title={editOffer ? "Edit Offer" : "Add Offer"}
+        size="lg"
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setShowOfferModal(false)}>Cancel</Button>
+            <Button loading={offerLoading} onClick={saveOffer} disabled={!offerForm.title || !offerForm.description}>
+              {editOffer ? "Save Changes" : "Create Offer"}
+            </Button>
+          </>
+        }
+      >
+        <div className="flex flex-col gap-4">
+          <Input
+            label="Title *"
+            placeholder="e.g. 6-Month Loyalty Bonus"
+            value={offerForm.title}
+            onChange={(e) => setOfferForm((p) => ({ ...p, title: e.target.value }))}
+          />
+          <Textarea
+            label="Description *"
+            placeholder="Describe the reward..."
+            rows={3}
+            value={offerForm.description}
+            onChange={(e) => setOfferForm((p) => ({ ...p, description: e.target.value }))}
+          />
+          <Input
+            label="Banner Image URL"
+            placeholder="https://..."
+            value={offerForm.bannerImage}
+            onChange={(e) => setOfferForm((p) => ({ ...p, bannerImage: e.target.value }))}
+          />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium text-[#1a1a1a]">Offer Type *</label>
+              <select
+                value={offerForm.offerType}
+                onChange={(e) => setOfferForm((p) => ({ ...p, offerType: e.target.value }))}
+                className="w-full rounded-md border border-[#e2e8f0] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3B7A57]"
+              >
+                {Object.entries(OFFER_TYPE_LABELS).map(([value, label]) => (
+                  <option key={value} value={value}>{label}</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium text-[#1a1a1a]">Target Group</label>
+              <select
+                value={offerForm.targetGroup}
+                onChange={(e) => setOfferForm((p) => ({ ...p, targetGroup: e.target.value }))}
+                className="w-full rounded-md border border-[#e2e8f0] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3B7A57]"
+              >
+                <option value="ALL">All Employees</option>
+                <option value="ACTIVE_ONLY">Active Only</option>
+              </select>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium text-[#1a1a1a]">Start Date</label>
+              <input
+                type="date"
+                value={offerForm.startDate}
+                onChange={(e) => setOfferForm((p) => ({ ...p, startDate: e.target.value }))}
+                className="w-full rounded-md border border-[#e2e8f0] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3B7A57]"
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium text-[#1a1a1a]">End Date <span className="text-[#64748b] font-normal">(optional)</span></label>
+              <input
+                type="date"
+                value={offerForm.endDate}
+                onChange={(e) => setOfferForm((p) => ({ ...p, endDate: e.target.value }))}
+                className="w-full rounded-md border border-[#e2e8f0] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3B7A57]"
+              />
+            </div>
+          </div>
+          <div className="flex items-center justify-between rounded-md border border-[#e2e8f0] px-4 py-3">
+            <div>
+              <p className="text-sm font-medium text-[#1a1a1a]">Active</p>
+              <p className="text-xs text-[#64748b]">Visible to eligible employees</p>
+            </div>
+            <button type="button" onClick={() => setOfferForm((p) => ({ ...p, isActive: !p.isActive }))} className="text-[#1E4D3D] flex-shrink-0 ml-4">
+              {offerForm.isActive ? <ToggleRight className="h-7 w-7" /> : <ToggleLeft className="h-7 w-7 text-[#64748b]" />}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Delete Offer Confirmation */}
+      {deleteOfferTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setDeleteOfferTarget(null)} />
+          <div className="relative z-10 w-full max-w-sm rounded-xl bg-white p-6 shadow-2xl">
+            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-[#D32F2F]/10">
+              <Trash2 className="h-6 w-6 text-[#D32F2F]" />
+            </div>
+            <h3 className="mb-2 text-lg font-semibold text-[#1a1a1a]">Delete Offer</h3>
+            <p className="mb-1 text-sm font-medium text-[#1a1a1a]">{deleteOfferTarget.title}</p>
+            <p className="mb-6 text-sm text-[#64748b]">
+              This will permanently delete this offer and all associated employee rewards.
+            </p>
+            <div className="flex gap-3">
+              <Button variant="outline" className="flex-1" onClick={() => setDeleteOfferTarget(null)} disabled={deleteOfferLoading}>
+                Cancel
+              </Button>
+              <Button variant="danger" className="flex-1" onClick={handleDeleteOffer} loading={deleteOfferLoading}>
+                Delete
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

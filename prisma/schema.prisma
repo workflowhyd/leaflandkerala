@@ -74,6 +74,20 @@ enum ActivityType {
   PRODUCT_UPDATE
 }
 
+enum OfferType {
+  SIX_MONTHS_BONUS
+  BEST_PERFORMER
+  MONTHLY_INCENTIVE
+  FESTIVAL_BONUS
+  REFERRAL_BONUS
+  CUSTOM
+}
+
+enum TargetGroup {
+  ALL
+  ACTIVE_ONLY
+}
+
 model User {
   id        String   @id
   name      String
@@ -108,6 +122,7 @@ model Employee {
   orders            Order[]
   commissions       Commission[]
   locations         EmployeeLocation[]
+  rewards           EmployeeReward[]
 }
 
 model EmployeeDocument {
@@ -390,4 +405,37 @@ model CompanyInfo {
   logoUrl       String?
   logoPublicId  String?
   updatedAt     DateTime @updatedAt
+}
+
+model Offer {
+  id          String      @id @default(cuid())
+  title       String
+  description String
+  bannerImage String?
+  offerType   OfferType   @default(CUSTOM)
+  startDate   DateTime    @default(now())
+  endDate     DateTime?
+  targetGroup TargetGroup @default(ALL)
+  isActive    Boolean     @default(true)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  rewards EmployeeReward[]
+}
+
+model EmployeeReward {
+  id         String    @id @default(cuid())
+  employeeId String
+  offerId    String
+  achievedOn DateTime  @default(now())
+  claimed    Boolean   @default(false)
+  claimedOn  DateTime?
+  notified   Boolean   @default(false)
+  createdAt  DateTime  @default(now())
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  offer    Offer    @relation(fields: [offerId], references: [id], onDelete: Cascade)
+
+  @@unique([employeeId, offerId])
+  @@index([employeeId])
 }

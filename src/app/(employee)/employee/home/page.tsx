@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { Package, IndianRupee, Clock, Truck, CheckCircle, Circle } from "lucide-react";
 
 interface HomeData {
@@ -12,15 +12,170 @@ interface HomeData {
   weekDays: { label: string; date: string; done: boolean; isToday: boolean }[];
 }
 
+interface OfferItem {
+  id: string;
+  title: string;
+  description: string;
+  offerType: string;
+  bannerImage: string | null;
+}
+
+interface NewReward {
+  id: string;
+  offerId: string;
+}
+
+interface OffersData {
+  offers: OfferItem[];
+  newRewards: NewReward[];
+  monthsOfService: number;
+  is6MonthEligible: boolean;
+}
+
+const OFFER_EMOJI: Record<string, string> = {
+  SIX_MONTHS_BONUS: "🏆",
+  BEST_PERFORMER: "🥇",
+  MONTHLY_INCENTIVE: "💰",
+  FESTIVAL_BONUS: "🎉",
+  REFERRAL_BONUS: "🤝",
+  CUSTOM: "🎁",
+};
+
+function getBadge(months: number): { label: string; className: string } {
+  if (months >= 24) return { label: "Gold", className: "text-yellow-600 font-bold" };
+  if (months >= 12) return { label: "Silver", className: "text-gray-500 font-bold" };
+  return { label: "Bronze", className: "text-amber-700 font-bold" };
+}
+
+function OffersBanner({
+  offers,
+  newRewards,
+  monthsOfService,
+  onDismiss,
+  onMarkNotified,
+}: {
+  offers: OfferItem[];
+  newRewards: NewReward[];
+  monthsOfService: number;
+  onDismiss: () => void;
+  onMarkNotified: (ids: string[]) => void;
+}) {
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [notified, setNotified] = useState(false);
+
+  // Auto-rotate normal banners
+  useEffect(() => {
+    if (newRewards.length > 0 || offers.length <= 1) return;
+    const timer = setInterval(() => {
+      setCurrentIndex((i) => (i + 1) % offers.length);
+    }, 4000);
+    return () => clearInterval(timer);
+  }, [newRewards.length, offers.length]);
+
+  // Mark achievement as notified once on mount
+  useEffect(() => {
+    if (newRewards.length > 0 && !notified) {
+      setNotified(true);
+      onMarkNotified(newRewards.map((r) => r.id));
+    }
+  }, [newRewards, notified, onMarkNotified]);
+
+  if (newRewards.length > 0) {
+    const badge = getBadge(monthsOfService);
+    return (
+      <div className="mx-4 mt-4 rounded-xl border border-amber-200 bg-gradient-to-br from-amber-50 to-amber-100 p-4 shadow-sm">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-start gap-3">
+            <span className="text-3xl leading-none">🏆</span>
+            <div>
+              <p className="font-bold text-amber-900 text-sm">Congratulations!</p>
+              <p className="text-amber-800 text-xs mt-0.5">
+                You&apos;ve completed <span className="font-semibold">{monthsOfService} months</span> with the company!
+              </p>
+              <p className="text-amber-700 text-xs mt-1">
+                🎁 Your Loyalty Bonus is unlocked — contact your admin.
+              </p>
+              <p className="mt-1.5 text-xs">
+                Badge: <span className={badge.className}>{badge.label}</span>
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={onDismiss}
+            className="flex-shrink-0 text-amber-400 hover:text-amber-600 text-lg leading-none"
+            aria-label="Dismiss"
+          >
+            ×
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (offers.length === 0) return null;
+
+  const offer = offers[currentIndex];
+
+  return (
+    <div className="mx-4 mt-4 rounded-xl bg-white border border-gray-100 shadow-sm p-4">
+      <div className="flex items-center gap-3">
+        <span className="text-2xl leading-none flex-shrink-0">
+          {OFFER_EMOJI[offer.offerType] ?? "🎁"}
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="font-semibold text-gray-800 text-sm leading-tight">{offer.title}</p>
+          <p className="text-xs text-gray-500 mt-0.5 truncate">
+            {offer.description.length > 60 ? offer.description.slice(0, 60) + "…" : offer.description}
+          </p>
+        </div>
+        <button
+          onClick={onDismiss}
+          className="flex-shrink-0 text-gray-300 hover:text-gray-500 text-lg leading-none"
+          aria-label="Dismiss"
+        >
+          ×
+        </button>
+      </div>
+      {offers.length > 1 && (
+        <div className="flex justify-center gap-1.5 mt-3">
+          {offers.map((_, i) => (
+            <button
+              key={i}
+              onClick={() => setCurrentIndex(i)}
+              className={`w-1.5 h-1.5 rounded-full transition-colors ${i === currentIndex ? "bg-green-500" : "bg-gray-200"}`}
+              aria-label={`Offer ${i + 1}`}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function EmployeeHome() {
   const [data, setData] = useState<HomeData | null>(null);
+  const [offersData, setOffersData] = useState<OffersData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [bannerDismissed, setBannerDismissed] = useState(false);
 
   useEffect(() => {
-    fetch("/api/employee/home")
-      .then((r) => r.json())
-      .then(setData)
-      .finally(() => setLoading(false));
+    Promise.all([
+      fetch("/api/employee/home").then((r) => r.json()),
+      fetch("/api/employee/offers").then((r) => r.json()).catch(() => null),
+    ]).then(([homeData, offers]) => {
+      setData(homeData);
+      if (offers && !offers.error) setOffersData(offers);
+    }).finally(() => setLoading(false));
+  }, []);
+
+  const handleMarkNotified = useCallback(async (ids: string[]) => {
+    for (const rewardId of ids) {
+      await fetch("/api/employee/rewards", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rewardId }),
+      }).catch(() => null);
+    }
   }, []);
 
   const today = new Date();
@@ -39,6 +194,10 @@ export default function EmployeeHome() {
     );
   }
 
+  const showBanner = !bannerDismissed && offersData && (
+    offersData.newRewards.length > 0 || offersData.offers.length > 0
+  );
+
   return (
     <div className="bg-gray-50 min-h-screen">
       {/* Header */}
@@ -48,6 +207,17 @@ export default function EmployeeHome() {
           {greeting}, {data?.name?.split(" ")[0] ?? ""}!
         </h1>
       </div>
+
+      {/* Offers Banner */}
+      {showBanner && offersData && (
+        <OffersBanner
+          offers={offersData.offers}
+          newRewards={offersData.newRewards}
+          monthsOfService={offersData.monthsOfService}
+          onDismiss={() => setBannerDismissed(true)}
+          onMarkNotified={handleMarkNotified}
+        />
+      )}
 
       <div className="px-4 py-4 space-y-4">
         {/* Summary Cards */}
