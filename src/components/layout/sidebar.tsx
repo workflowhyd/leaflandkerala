@@ -17,6 +17,7 @@ import {
   LogOut,
   ChevronRight,
   X,
+  ClipboardList,
 } from "lucide-react";
 
 interface NavItem {
@@ -45,6 +46,12 @@ const navItems: NavItem[] = [
     adminOnly: true,
   },
   { label: "Maps", href: "/dashboard/maps", icon: Map, adminOnly: true },
+  {
+    label: "Registrations",
+    href: "/dashboard/registrations",
+    icon: ClipboardList,
+    adminOnly: true,
+  },
   {
     label: "Settings",
     href: "/dashboard/settings",

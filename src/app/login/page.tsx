@@ -242,6 +242,19 @@ export default function LoginPage() {
             </button>
           </form>
 
+          <div className="mt-4 text-center">
+            <p className="text-sm" style={{ color: "#64748b" }}>
+              New employee?{" "}
+              <a
+                href="/register"
+                className="font-medium transition-colors"
+                style={{ color: "#1E4D3D" }}
+              >
+                Create an account
+              </a>
+            </p>
+          </div>
+
           <p className="mt-8 text-xs text-center" style={{ color: "#94a3b8" }}>
             LeafLand Kerala &copy; {new Date().getFullYear()}. All rights reserved.
           </p>
