@@ -14,14 +14,14 @@ const eslintConfig = defineConfig([
   {
     rules: {
       "react-hooks/set-state-in-effect": "off",
-      "@typescript-eslint/no-unused-vars": "warn",
+      "@typescript-eslint/no-unused-vars": ["warn", { "argsIgnorePattern": "^_", "varsIgnorePattern": "^_" }],
       "@typescript-eslint/no-explicit-any": "off",
       "react-hooks/exhaustive-deps": "warn",
       "@next/next/no-img-element": "warn",
       "@typescript-eslint/no-empty-object-type": "warn",
       "@typescript-eslint/no-empty-interface": "warn",
       "prefer-const": "warn",
-      "no-unused-vars": "warn",
+      "no-unused-vars": "off",
       "no-console": "off",
       "@typescript-eslint/no-require-imports": "warn",
       "@next/next/no-html-link-for-pages": "warn",

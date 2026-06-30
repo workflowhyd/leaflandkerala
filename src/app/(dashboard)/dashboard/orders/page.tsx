@@ -101,8 +101,8 @@ function MobileOrderCard({
   onCancel,
 }: {
   order: Order;
-  onUpdateStatus: (o: Order) => void;
-  onCancel: (o: Order) => void;
+  onUpdateStatus: (_o: Order) => void;
+  onCancel: (_o: Order) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const canAct = order.status !== "CANCELLED" && order.status !== "DELIVERED";

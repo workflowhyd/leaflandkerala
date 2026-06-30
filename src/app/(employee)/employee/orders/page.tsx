@@ -708,7 +708,7 @@ function Header({ onBack, title, children }: { onBack: () => void; title: string
 }
 
 function SearchBar({ value, onChange, placeholder, loading }: {
-  value: string; onChange: (v: string) => void; placeholder: string; loading?: boolean;
+  value: string; onChange: (_v: string) => void; placeholder: string; loading?: boolean;
 }) {
   return (
     <div className="flex items-center gap-2 bg-white rounded-xl px-3 py-2 shadow-sm border border-gray-100">

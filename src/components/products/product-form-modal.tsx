@@ -10,6 +10,17 @@ import { ImagePlus, X, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const CATEGORY_OPTIONS = [
+  { value: "MANGO", label: "Mango" },
+  { value: "JACKFRUIT", label: "Jackfruit" },
+  { value: "COCONUT", label: "Coconut" },
+  { value: "FRUIT_PLANTS", label: "Fruit Plants" },
+  { value: "SPICES", label: "Spices & Arecanut" },
+  { value: "ORNAMENTAL_PALMS", label: "Ornamental Palms" },
+  { value: "FLOWERS", label: "Flowers" },
+  { value: "INDOOR_PLANTS", label: "Indoor Plants" },
+  { value: "ORNAMENTAL_PLANTS", label: "Ornamental Plants" },
+  { value: "TIMBER_TREES", label: "Timber Trees" },
+  { value: "GROW_SUPPLIES", label: "Grow Supplies" },
   { value: "SEEDS", label: "Seeds" },
   { value: "FERTILIZERS", label: "Fertilizers" },
   { value: "PESTICIDES", label: "Pesticides" },

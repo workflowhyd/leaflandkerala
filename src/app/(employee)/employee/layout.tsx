@@ -4,15 +4,17 @@ import { usePathname } from "next/navigation";
 import { useEffect, useRef } from "react";
 import { Home, ShoppingCart, Users, User } from "lucide-react";
 import { CartProvider } from "@/components/employee/cart-context";
+import { useSessionTimeout } from "@/hooks/use-session-timeout";
+import { SessionTimeoutModal } from "@/components/ui/session-timeout-modal";
 
 const NAV = [
-  { href: "/employee/home",      icon: Home,         label: "Home" },
-  { href: "/employee/orders",    icon: ShoppingCart,  label: "Orders" },
-  { href: "/employee/customers", icon: Users,         label: "Customers" },
-  { href: "/employee/profile",   icon: User,          label: "Profile" },
+  { href: "/employee/home",      icon: Home,        label: "Home" },
+  { href: "/employee/orders",    icon: ShoppingCart, label: "Orders" },
+  { href: "/employee/customers", icon: Users,        label: "Customers" },
+  { href: "/employee/profile",   icon: User,         label: "Profile" },
 ];
 
-const LOCATION_INTERVAL_MS = 10 * 60 * 1000; // every 10 minutes
+const LOCATION_INTERVAL_MS = 10 * 60 * 1000;
 
 function usePeriodicLocation() {
   const lastSent = useRef<number>(0);
@@ -24,7 +26,7 @@ function usePeriodicLocation() {
       navigator.geolocation.getCurrentPosition(
         (pos) => {
           const now = Date.now();
-          if (now - lastSent.current < 5 * 60 * 1000) return; // debounce 5 min
+          if (now - lastSent.current < 5 * 60 * 1000) return;
           lastSent.current = now;
           fetch("/api/employee/location", {
             method: "POST",
@@ -47,15 +49,21 @@ function usePeriodicLocation() {
   }, []);
 }
 
-export default function EmployeeLayout({ children }: { children: React.ReactNode }) {
+function EmployeeLayoutInner({ children }: { children: React.ReactNode }) {
   const path = usePathname();
   usePeriodicLocation();
+  const { showWarning, secondsLeft, extendSession, doLogout } = useSessionTimeout();
 
   return (
-    <CartProvider>
+    <>
+      <SessionTimeoutModal
+        open={showWarning}
+        secondsLeft={secondsLeft}
+        onStay={extendSession}
+        onLogout={doLogout}
+      />
       <div className="min-h-screen bg-gray-50 flex flex-col">
         <main className="flex-1 overflow-y-auto pb-16">{children}</main>
-
         <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-50">
           <div className="grid grid-cols-4 h-16">
             {NAV.map(({ href, icon: Icon, label }) => {
@@ -76,6 +84,14 @@ export default function EmployeeLayout({ children }: { children: React.ReactNode
           </div>
         </nav>
       </div>
+    </>
+  );
+}
+
+export default function EmployeeLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <CartProvider>
+      <EmployeeLayoutInner>{children}</EmployeeLayoutInner>
     </CartProvider>
   );
 }

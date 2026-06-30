@@ -7,6 +7,8 @@ import { Sidebar } from "./sidebar";
 import { TopNav } from "./top-nav";
 import { BottomNav } from "./bottom-nav";
 import { ToastProvider } from "@/components/ui/toast";
+import { useSessionTimeout } from "@/hooks/use-session-timeout";
+import { SessionTimeoutModal } from "@/components/ui/session-timeout-modal";
 
 const PAGE_TITLES: Record<string, string> = {
   "/dashboard": "Dashboard",
@@ -68,11 +70,21 @@ export function DashboardClientShell({
 
   const handleLogout = async () => {
     await fetch("/api/auth/logout", { method: "POST" });
+    localStorage.removeItem("employee_cart");
+    localStorage.removeItem("employee_order_queue");
     router.push("/login");
   };
 
+  const { showWarning, secondsLeft, extendSession, doLogout } = useSessionTimeout();
+
   return (
     <ToastProvider>
+      <SessionTimeoutModal
+        open={showWarning}
+        secondsLeft={secondsLeft}
+        onStay={extendSession}
+        onLogout={doLogout}
+      />
       <div className="flex h-screen overflow-hidden bg-[#F8F5EE]">
         {/* Desktop sidebar — hidden on mobile */}
         <div className="hidden lg:flex flex-shrink-0 h-full">

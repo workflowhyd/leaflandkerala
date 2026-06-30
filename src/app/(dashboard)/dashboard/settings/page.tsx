@@ -109,6 +109,11 @@ export default function SettingsPage() {
   const [deleteLoading, setDeleteLoading] = useState(false);
   const logoInputRef = useRef<HTMLInputElement>(null);
 
+  const fetchPincodes = async () => {
+    const res = await fetch("/api/pincodes");
+    if (res.ok) setPincodes(await res.json());
+  };
+
   useEffect(() => {
     fetch("/api/settings").then((r) => r.json()).then((data) => {
       if (data.company) setCompany({ businessName: data.company.businessName || "", contactNumber: data.company.contactNumber || "", email: data.company.email || "", gstNumber: data.company.gstNumber || "", address: data.company.address || "", logoUrl: data.company.logoUrl || "" });
@@ -117,11 +122,6 @@ export default function SettingsPage() {
     });
     fetchPincodes();
   }, []);
-
-  const fetchPincodes = async () => {
-    const res = await fetch("/api/pincodes");
-    if (res.ok) setPincodes(await res.json());
-  };
 
   const showSaved = (msg = "Settings saved successfully.") => {
     setSaveMsg(msg);

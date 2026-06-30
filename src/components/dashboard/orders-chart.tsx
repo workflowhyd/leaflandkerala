@@ -54,7 +54,6 @@ function CustomTooltip({ active, payload }: { active?: boolean; payload?: Array<
   return null;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function CustomLegend({ payload }: any) {
   if (!payload) return null;
   return (

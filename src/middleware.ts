@@ -13,6 +13,7 @@ const ADMIN_ONLY = [
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
+  const isApiRoute = pathname.startsWith("/api/");
   const isPublic =
     PUBLIC_PAGES.some((r) => pathname.startsWith(r)) ||
     PUBLIC_API.some((r) => pathname.startsWith(r));
@@ -49,8 +50,11 @@ export async function middleware(request: NextRequest) {
 
   if (isPublic) return response;
 
-  // Not authenticated → redirect to login
+  // Not authenticated → redirect page requests to login, but return JSON for API calls
   if (!user) {
+    if (isApiRoute) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     return NextResponse.redirect(new URL("/login", request.url));
   }
 

@@ -52,10 +52,10 @@ function reducer(state: CartState, action: CartAction): CartState {
 }
 
 interface CartContextValue extends CartState {
-  addItem: (item: Omit<CartItem, "quantity">) => void;
-  removeItem: (productId: string) => void;
-  setQuantity: (productId: string, quantity: number) => void;
-  clearCart: () => void;
+  addItem(item: Omit<CartItem, "quantity">): void;
+  removeItem(productId: string): void;
+  setQuantity(productId: string, quantity: number): void;
+  clearCart(): void;
   total: number;
   itemCount: number;
 }

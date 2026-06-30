@@ -14,11 +14,11 @@ interface Toast {
 }
 
 interface ToastContextValue {
-  toast: (options: Omit<Toast, "id">) => void;
-  success: (title: string, description?: string) => void;
-  error: (title: string, description?: string) => void;
-  warning: (title: string, description?: string) => void;
-  info: (title: string, description?: string) => void;
+  toast(options: Omit<Toast, "id">): void;
+  success(title: string, description?: string): void;
+  error(title: string, description?: string): void;
+  warning(title: string, description?: string): void;
+  info(title: string, description?: string): void;
 }
 
 const ToastContext = createContext<ToastContextValue | null>(null);
@@ -44,7 +44,7 @@ const ICON_STYLES: Record<ToastType, string> = {
   info: "text-[#1565C0]",
 };
 
-function ToastItem({ toast, onRemove }: { toast: Toast; onRemove: (id: string) => void }) {
+function ToastItem({ toast, onRemove }: { toast: Toast; onRemove: (_id: string) => void }) {
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {

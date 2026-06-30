@@ -5,7 +5,13 @@ import { z } from "zod";
 
 const productSchema = z.object({
   name: z.string().min(2),
-  category: z.enum(["SEEDS", "FERTILIZERS", "PESTICIDES", "ORGANIC_PRODUCTS", "FARMING_TOOLS", "IRRIGATION_SUPPLIES", "AGRICULTURAL_EQUIPMENT"]),
+  category: z.enum([
+    "SEEDS", "FERTILIZERS", "PESTICIDES", "ORGANIC_PRODUCTS",
+    "FARMING_TOOLS", "IRRIGATION_SUPPLIES", "AGRICULTURAL_EQUIPMENT",
+    "MANGO", "JACKFRUIT", "COCONUT", "SPICES", "ORNAMENTAL_PALMS",
+    "FLOWERS", "INDOOR_PLANTS", "ORNAMENTAL_PLANTS", "TIMBER_TREES",
+    "FRUIT_PLANTS", "GROW_SUPPLIES",
+  ]),
   description: z.string().optional(),
   price: z.number().positive(),
   salePrice: z.number().positive().optional().nullable(),
@@ -37,17 +43,25 @@ export async function GET(request: NextRequest) {
   if (category) where.category = category;
   if (isActive !== null && isActive !== "") where.isActive = isActive === "true";
 
-  const [products, total] = await Promise.all([
-    prisma.product.findMany({
-      where,
-      orderBy: { createdAt: "desc" },
-      skip: (page - 1) * limit,
-      take: limit,
-    }),
-    prisma.product.count({ where }),
-  ]);
+  try {
+    const [products, total] = await Promise.all([
+      prisma.product.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      prisma.product.count({ where }),
+    ]);
 
-  return NextResponse.json({ products, total, page, limit });
+    return NextResponse.json({ products, total, page, limit });
+  } catch (err) {
+    console.error("[products GET]", err);
+    return NextResponse.json(
+      { error: process.env.NODE_ENV === "development" ? String(err) : "Database error" },
+      { status: 500 }
+    );
+  }
 }
 
 export async function POST(request: NextRequest) {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, use } from "react";
+import { useState, useEffect, useCallback, use } from "react";
 import Link from "next/link";
 import { ArrowLeft, Download, RefreshCw, XCircle, MapPin, Phone, User, Calendar, Package } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -52,13 +52,13 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
   const [loading, setLoading] = useState(true);
   const [updateOpen, setUpdateOpen] = useState(false);
 
-  const fetchOrder = async () => {
+  const fetchOrder = useCallback(async () => {
     const res = await fetch(`/api/orders/${id}`);
     if (res.ok) setOrder(await res.json());
     setLoading(false);
-  };
+  }, [id]);
 
-  useEffect(() => { fetchOrder(); }, [id]);
+  useEffect(() => { fetchOrder(); }, [fetchOrder]);
 
   const handleCancel = async () => {
     if (!confirm("Cancel this order?")) return;

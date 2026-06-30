@@ -27,6 +27,9 @@ export default function ProfilePage() {
   async function handleLogout() {
     setLoggingOut(true);
     await fetch("/api/auth/logout", { method: "POST" });
+    // Clear all local state so the next user on this device starts clean
+    localStorage.removeItem("employee_cart");
+    localStorage.removeItem("employee_order_queue");
     router.replace("/login");
   }
 

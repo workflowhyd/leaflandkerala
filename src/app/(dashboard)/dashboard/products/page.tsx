@@ -45,6 +45,17 @@ interface Product {
 
 const CATEGORY_OPTIONS = [
   { value: "", label: "All Categories" },
+  { value: "MANGO", label: "Mango" },
+  { value: "JACKFRUIT", label: "Jackfruit" },
+  { value: "COCONUT", label: "Coconut" },
+  { value: "FRUIT_PLANTS", label: "Fruit Plants" },
+  { value: "SPICES", label: "Spices & Arecanut" },
+  { value: "ORNAMENTAL_PALMS", label: "Ornamental Palms" },
+  { value: "FLOWERS", label: "Flowers" },
+  { value: "INDOOR_PLANTS", label: "Indoor Plants" },
+  { value: "ORNAMENTAL_PLANTS", label: "Ornamental Plants" },
+  { value: "TIMBER_TREES", label: "Timber Trees" },
+  { value: "GROW_SUPPLIES", label: "Grow Supplies" },
   { value: "SEEDS", label: "Seeds" },
   { value: "FERTILIZERS", label: "Fertilizers" },
   { value: "PESTICIDES", label: "Pesticides" },
@@ -209,9 +220,11 @@ export default function ProductsPage() {
       if (category) params.set("category", category);
       if (isActive !== "") params.set("isActive", isActive);
 
-      const res = await fetch(`/api/products?${params.toString()}`);
-      if (!res.ok) throw new Error("Failed to fetch");
-      const data = await res.json();
+      const res = await fetch(`/api/products?${params.toString()}`, {
+        credentials: "same-origin",
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error || "Failed to fetch");
       setProducts(data.products);
       setTotal(data.total);
     } catch {

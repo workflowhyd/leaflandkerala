@@ -805,10 +805,10 @@ function EditableField({
   editingField: string | null;
   editValue: string;
   saving: boolean;
-  onEdit: (field: string, value: string) => void;
-  onSave: (field: string) => void;
+  onEdit: (_field: string, _value: string) => void;
+  onSave: (_field: string) => void;
   onCancel: () => void;
-  onEditValueChange: (v: string) => void;
+  onEditValueChange: (_v: string) => void;
 }) {
   const isEditing = editingField === fieldKey;
   return (
