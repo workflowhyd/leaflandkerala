@@ -109,12 +109,9 @@ export async function POST(request: NextRequest) {
     weekday: "long", day: "numeric", month: "long", year: "numeric",
   });
 
-  // Fetch WhatsApp template (non-blocking)
-  const [waSettings] = await Promise.all([
-    prisma.whatsAppSetting.findFirst({
-      select: { isEnabled: true, templateOrderPlaced: true },
-    }),
-  ]);
+  const waSettings = await prisma.whatsAppSetting.findFirst({
+    select: { isEnabled: true, templateOrderPlaced: true, adminPhone: true },
+  });
 
   const order = await prisma.$transaction(async (tx) => {
     // Create order
@@ -243,6 +240,13 @@ export async function POST(request: NextRequest) {
   const mobile = customer.mobile.replace(/\D/g, "");
   const whatsappUrl = `https://wa.me/91${mobile}?text=${encodeURIComponent(whatsappMessage)}`;
 
+  const itemList = order.items.map((i) => `• ${i.product.name} x${i.quantity}`).join("\n");
+  const adminMessage = `New Order Alert!\n\nOrder: ${order.orderNumber}\nCustomer: ${customer.name} (${customer.mobile})\nAmount: ₹${totalAmount.toLocaleString("en-IN")}\nDelivery: ${deliveryDateStr}\n\nItems:\n${itemList}\n\nEmployee: ${employee.name}`;
+  const adminPhone = waSettings?.adminPhone?.replace(/\D/g, "");
+  const adminWhatsappUrl = adminPhone
+    ? `https://wa.me/${adminPhone}?text=${encodeURIComponent(adminMessage)}`
+    : null;
+
   return NextResponse.json(
     {
       ...order,
@@ -250,6 +254,7 @@ export async function POST(request: NextRequest) {
       deliveryDateStr,
       whatsappUrl,
       whatsappMessage,
+      adminWhatsappUrl,
     },
     { status: 201 }
   );

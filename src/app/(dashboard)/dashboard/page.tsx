@@ -11,6 +11,7 @@ import {
   AlertTriangle,
   Users,
   TrendingUp,
+  CalendarCheck,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { cookies } from "next/headers";
@@ -51,6 +52,12 @@ export default async function DashboardPage() {
   const ordersByStatus = data?.ordersByStatus ?? [];
   const recentOrders = data?.recentOrders ?? [];
   const topEmployees = data?.topEmployees ?? [];
+
+  const sundayDeliveries = data?.sundayDeliveries ?? [];
+  const upcomingSunday: string | undefined = data?.upcomingSunday;
+  const sundayLabel = upcomingSunday
+    ? new Date(upcomingSunday).toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long" })
+    : "this Sunday";
 
   const revenueChange = parseFloat(stats.revenueChange);
   const revenueChangeType =
@@ -148,6 +155,50 @@ export default async function DashboardPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Upcoming Sunday Deliveries */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <CalendarCheck className="h-5 w-5 text-[#1E4D3D]" />
+              <div>
+                <CardTitle>Upcoming Sunday Deliveries</CardTitle>
+                <p className="mt-0.5 text-sm text-[#64748b]">{sundayLabel} — {sundayDeliveries.length} order{sundayDeliveries.length !== 1 ? "s" : ""} scheduled</p>
+              </div>
+            </div>
+            <a href="/dashboard/orders?deliveryDay=sunday" className="text-xs font-semibold text-[#3B7A57] hover:underline">View all</a>
+          </div>
+        </CardHeader>
+        <CardContent className="px-0 pb-2">
+          {sundayDeliveries.length === 0 ? (
+            <p className="px-6 py-4 text-sm text-[#64748b]">No orders scheduled for delivery this Sunday.</p>
+          ) : (
+            <div className="divide-y divide-[#e2e8f0]">
+              {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+              {sundayDeliveries.map((order: any) => (
+                <div key={order.id} className="flex items-center justify-between gap-4 px-6 py-3">
+                  <div className="min-w-0">
+                    <p className="font-medium text-[#1a1a1a] truncate">{order.customer.name}</p>
+                    <p className="text-xs text-[#64748b]">
+                      {order.customer.village ? `${order.customer.village} · ` : ""}{order.employee.name} · {order.items.length} item{order.items.length !== 1 ? "s" : ""}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-3 flex-shrink-0">
+                    <span className="font-semibold text-[#1E4D3D]">₹{order.totalAmount.toLocaleString("en-IN")}</span>
+                    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                      order.status === "PACKED" ? "bg-blue-100 text-blue-700" :
+                      order.status === "OUT_FOR_DELIVERY" ? "bg-green-100 text-green-700" :
+                      "bg-yellow-100 text-yellow-700"
+                    }`}>{order.status.replace(/_/g, " ")}</span>
+                    <a href={`/dashboard/orders/${order.id}`} className="text-xs font-medium text-[#3B7A57] hover:underline">{order.orderNumber}</a>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Recent orders + Top employees — stack on mobile, 5-col grid on lg */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-5 lg:gap-6">

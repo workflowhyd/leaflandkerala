@@ -27,6 +27,7 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { cn, formatCurrency, getStatusLabel } from "@/lib/utils";
+import { getCategoryMeta } from "@/lib/category-images";
 
 interface Product {
   id: string;
@@ -106,23 +107,26 @@ function StockBadge({ stock }: { stock: number }) {
   );
 }
 
-function ProductImage({ url, name }: { url?: string | null; name: string }) {
-  if (url) {
+function ProductImage({
+  url, name, category,
+  containerClass = "h-10 w-10 rounded-lg",
+  imgClass = "h-10 w-10 rounded-lg object-cover",
+  emojiClass = "text-xl",
+}: {
+  url?: string | null; name: string; category: string;
+  containerClass?: string; imgClass?: string; emojiClass?: string;
+}) {
+  const [imgError, setImgError] = useState(false);
+  const meta = getCategoryMeta(category);
+  if (url && !imgError) {
     return (
       // eslint-disable-next-line @next/next/no-img-element
-      <img
-        src={url}
-        alt={name}
-        className="h-10 w-10 rounded-lg object-cover"
-        onError={(e) => {
-          (e.target as HTMLImageElement).style.display = "none";
-        }}
-      />
+      <img src={url} alt={name} className={imgClass} onError={() => setImgError(true)} />
     );
   }
   return (
-    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#1E4D3D]/10">
-      <PackageOpen className="h-5 w-5 text-[#1E4D3D]" />
+    <div className={`flex items-center justify-center ${meta.bg} ${containerClass}`}>
+      <span className={`leading-none ${emojiClass}`}>{meta.emoji}</span>
     </div>
   );
 }
@@ -396,19 +400,15 @@ export default function ProductsPage() {
               key={product.id}
               className="group overflow-hidden transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
             >
-              <div className="relative h-40 w-full overflow-hidden bg-[#f8f9fa]">
-                {product.imageUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={product.imageUrl}
-                    alt={product.name}
-                    className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
-                  />
-                ) : (
-                  <div className="flex h-full w-full items-center justify-center">
-                    <PackageOpen className="h-14 w-14 text-[#cbd5e1]" />
-                  </div>
-                )}
+              <div className="relative h-40 w-full overflow-hidden">
+                <ProductImage
+                  url={product.imageUrl}
+                  name={product.name}
+                  category={product.category}
+                  containerClass="h-40 w-full"
+                  imgClass="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                  emojiClass="text-5xl"
+                />
                 {!product.isActive && (
                   <div className="absolute inset-0 flex items-center justify-center bg-black/40">
                     <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-[#D32F2F]">
@@ -500,18 +500,14 @@ export default function ProductsPage() {
               <Card key={product.id} className="overflow-hidden">
                 <div className="flex gap-3 p-3">
                   <div className="flex-shrink-0">
-                    {product.imageUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={product.imageUrl}
-                        alt={product.name}
-                        className="h-16 w-16 rounded-lg object-cover"
-                      />
-                    ) : (
-                      <div className="flex h-16 w-16 items-center justify-center rounded-lg bg-[#1E4D3D]/10">
-                        <PackageOpen className="h-7 w-7 text-[#1E4D3D]" />
-                      </div>
-                    )}
+                    <ProductImage
+                      url={product.imageUrl}
+                      name={product.name}
+                      category={product.category}
+                      containerClass="h-16 w-16 rounded-lg"
+                      imgClass="h-16 w-16 rounded-lg object-cover"
+                      emojiClass="text-3xl"
+                    />
                   </div>
                   <div className="flex flex-1 flex-col min-w-0">
                     <div className="flex items-start justify-between gap-2 mb-1">
@@ -613,6 +609,7 @@ export default function ProductsPage() {
                       <ProductImage
                         url={product.imageUrl}
                         name={product.name}
+                        category={product.category}
                       />
                     </TableCell>
                     <TableCell>

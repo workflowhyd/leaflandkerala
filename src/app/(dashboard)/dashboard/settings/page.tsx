@@ -30,6 +30,7 @@ interface WhatsAppSetting {
   isEnabled: boolean;
   apiKey: string;
   phoneNumberId: string;
+  adminPhone: string;
   templateOrderPlaced: string;
   templateConfirmed: string;
   templateProcessing: string;
@@ -100,7 +101,7 @@ export default function SettingsPage() {
   const [saveMsg, setSaveMsg] = useState("");
 
   const [company, setCompany] = useState<CompanyInfo>({ businessName: "LeafLand Kerala", contactNumber: "", email: "", gstNumber: "", address: "", logoUrl: "" });
-  const [whatsapp, setWhatsapp] = useState<WhatsAppSetting>({ isEnabled: false, apiKey: "", phoneNumberId: "", templateOrderPlaced: "", templateConfirmed: "", templateProcessing: "", templateDispatched: "", templateDelivery: "", templateDelivered: "", templateReminder: "" });
+  const [whatsapp, setWhatsapp] = useState<WhatsAppSetting>({ isEnabled: false, apiKey: "", phoneNumberId: "", adminPhone: "", templateOrderPlaced: "", templateConfirmed: "", templateProcessing: "", templateDispatched: "", templateDelivery: "", templateDelivered: "", templateReminder: "" });
   const [commission, setCommission] = useState<CommissionSetting>({ defaultPercentage: 10, minPercentage: 5, maxPercentage: 15 });
   const [pincodes, setPincodes] = useState<Pincode[]>([]);
   const [newPincode, setNewPincode] = useState({ code: "", area: "", district: "" });
@@ -117,7 +118,7 @@ export default function SettingsPage() {
   useEffect(() => {
     fetch("/api/settings").then((r) => r.json()).then((data) => {
       if (data.company) setCompany({ businessName: data.company.businessName || "", contactNumber: data.company.contactNumber || "", email: data.company.email || "", gstNumber: data.company.gstNumber || "", address: data.company.address || "", logoUrl: data.company.logoUrl || "" });
-      if (data.whatsapp) setWhatsapp({ isEnabled: data.whatsapp.isEnabled, apiKey: data.whatsapp.apiKey || "", phoneNumberId: data.whatsapp.phoneNumberId || "", templateOrderPlaced: data.whatsapp.templateOrderPlaced || "", templateConfirmed: data.whatsapp.templateConfirmed || "", templateProcessing: data.whatsapp.templateProcessing || "", templateDispatched: data.whatsapp.templateDispatched || "", templateDelivery: data.whatsapp.templateDelivery || "", templateDelivered: data.whatsapp.templateDelivered || "", templateReminder: data.whatsapp.templateReminder || "" });
+      if (data.whatsapp) setWhatsapp({ isEnabled: data.whatsapp.isEnabled, apiKey: data.whatsapp.apiKey || "", phoneNumberId: data.whatsapp.phoneNumberId || "", adminPhone: data.whatsapp.adminPhone || "", templateOrderPlaced: data.whatsapp.templateOrderPlaced || "", templateConfirmed: data.whatsapp.templateConfirmed || "", templateProcessing: data.whatsapp.templateProcessing || "", templateDispatched: data.whatsapp.templateDispatched || "", templateDelivery: data.whatsapp.templateDelivery || "", templateDelivered: data.whatsapp.templateDelivered || "", templateReminder: data.whatsapp.templateReminder || "" });
       if (data.commission) setCommission({ defaultPercentage: data.commission.defaultPercentage, minPercentage: data.commission.minPercentage, maxPercentage: data.commission.maxPercentage });
     });
     fetchPincodes();
@@ -271,6 +272,7 @@ export default function SettingsPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Input label="API Key" type="password" value={whatsapp.apiKey} onChange={(e) => setWhatsapp((p) => ({ ...p, apiKey: e.target.value }))} placeholder="WhatsApp Business API key" />
                 <Input label="Phone Number ID" value={whatsapp.phoneNumberId} onChange={(e) => setWhatsapp((p) => ({ ...p, phoneNumberId: e.target.value }))} placeholder="Meta Phone Number ID" />
+                <Input label="Admin WhatsApp Number" value={whatsapp.adminPhone} onChange={(e) => setWhatsapp((p) => ({ ...p, adminPhone: e.target.value }))} placeholder="91XXXXXXXXXX (with country code)" />
               </div>
               <div className="border-t border-[#e2e8f0] pt-4">
                 <p className="text-sm font-semibold text-[#1a1a1a] mb-3">Message Templates</p>
@@ -296,7 +298,7 @@ export default function SettingsPage() {
               </div>
             </div>
             <div className="mt-6 flex justify-end">
-              <Button loading={saving} onClick={() => saveSettings("whatsapp", { isEnabled: whatsapp.isEnabled, apiKey: whatsapp.apiKey || null, phoneNumberId: whatsapp.phoneNumberId || null, templateOrderPlaced: whatsapp.templateOrderPlaced, templateConfirmed: whatsapp.templateConfirmed, templateProcessing: whatsapp.templateProcessing, templateDispatched: whatsapp.templateDispatched, templateDelivery: whatsapp.templateDelivery, templateDelivered: whatsapp.templateDelivered, templateReminder: whatsapp.templateReminder })}>
+              <Button loading={saving} onClick={() => saveSettings("whatsapp", { isEnabled: whatsapp.isEnabled, apiKey: whatsapp.apiKey || null, phoneNumberId: whatsapp.phoneNumberId || null, adminPhone: whatsapp.adminPhone || null, templateOrderPlaced: whatsapp.templateOrderPlaced, templateConfirmed: whatsapp.templateConfirmed, templateProcessing: whatsapp.templateProcessing, templateDispatched: whatsapp.templateDispatched, templateDelivery: whatsapp.templateDelivery, templateDelivered: whatsapp.templateDelivered, templateReminder: whatsapp.templateReminder })}>
                 Save WhatsApp Settings
               </Button>
             </div>

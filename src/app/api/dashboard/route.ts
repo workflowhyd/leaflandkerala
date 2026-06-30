@@ -11,6 +11,13 @@ export async function GET(_request: NextRequest) {
   const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
   const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0);
 
+  const daysUntilSunday = (7 - now.getDay()) % 7 || 7;
+  const upcomingSunday = new Date(now);
+  upcomingSunday.setDate(now.getDate() + daysUntilSunday);
+  upcomingSunday.setHours(0, 0, 0, 0);
+  const upcomingSundayEnd = new Date(upcomingSunday);
+  upcomingSundayEnd.setHours(23, 59, 59, 999);
+
   const [
     totalRevenue,
     lastMonthRevenue,
@@ -22,6 +29,7 @@ export async function GET(_request: NextRequest) {
     topEmployees,
     monthlyRevenue,
     ordersByStatus,
+    sundayDeliveries,
   ] = await Promise.all([
     prisma.order.aggregate({
       _sum: { totalAmount: true },
@@ -69,6 +77,18 @@ export async function GET(_request: NextRequest) {
       by: ["status"],
       _count: { status: true },
     }),
+    prisma.order.findMany({
+      where: {
+        deliveryDate: { gte: upcomingSunday, lte: upcomingSundayEnd },
+        status: { notIn: ["DELIVERED", "CANCELLED"] },
+      },
+      include: {
+        customer: { select: { name: true, mobile: true, village: true } },
+        employee: { select: { name: true } },
+        items: { select: { quantity: true, subtotal: true } },
+      },
+      orderBy: { totalAmount: "desc" },
+    }),
   ]);
 
   const thisMonthRevenue = await prisma.order.aggregate({
@@ -107,5 +127,7 @@ export async function GET(_request: NextRequest) {
     topEmployees: topEmployeesFormatted,
     monthlyRevenue,
     ordersByStatus,
+    sundayDeliveries,
+    upcomingSunday,
   });
 }

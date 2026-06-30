@@ -4,10 +4,11 @@ import { useSearchParams, useRouter } from "next/navigation";
 import {
   ArrowLeft, Plus, Minus, Search, Trash2, MapPin, CheckCircle,
   ChevronRight, ShoppingCart, X, AlertCircle, Camera, MessageCircle,
-  Home, ExternalLink,
+  Home, ExternalLink, RefreshCw,
 } from "lucide-react";
 import { useCart, CartItem } from "@/components/employee/cart-context";
 import { compressImage } from "@/lib/compress-image";
+import { getCategoryMeta } from "@/lib/category-images";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -37,6 +38,7 @@ interface PlacedOrder {
   id: string; orderNumber: string; totalAmount: number;
   deliveryDate: string; deliveryDateStr: string;
   whatsappUrl: string; whatsappMessage: string;
+  adminWhatsappUrl?: string | null;
   customer: { name: string; mobile: string };
 }
 
@@ -96,6 +98,29 @@ function Loader() {
   );
 }
 
+// ─── Product Thumbnail ────────────────────────────────────────────────────────
+
+function ProductThumb({ imageUrl, category, serialNumber }: { imageUrl?: string | null; category: string; serialNumber: number }) {
+  const [imgError, setImgError] = useState(false);
+  const meta = getCategoryMeta(category);
+  if (imageUrl && !imgError) {
+    return (
+      <img
+        src={imageUrl}
+        alt={category}
+        className="w-12 h-12 rounded-lg object-cover shrink-0"
+        onError={() => setImgError(true)}
+      />
+    );
+  }
+  return (
+    <div className={`w-12 h-12 rounded-lg ${meta.bg} flex flex-col items-center justify-center shrink-0 gap-0.5`}>
+      <span className="text-lg leading-none">{meta.emoji}</span>
+      <span className="text-[9px] font-mono text-gray-400">#{serialNumber}</span>
+    </div>
+  );
+}
+
 // ─── Main Content ─────────────────────────────────────────────────────────────
 
 function OrdersPageContent() {
@@ -116,8 +141,9 @@ function OrdersPageContent() {
   const [showNewCustomer, setShowNewCustomer] = useState(false);
   const [newCustomer, setNewCustomer] = useState({ name: "", mobile: "", address: "", village: "", district: "", pincode: "" });
   const [notes, setNotes] = useState("");
-  const [gps, setGps] = useState<{ lat: number; lng: number } | null>(null);
+  const [gps, setGps] = useState<{ lat: number; lng: number; accuracy?: number } | null>(null);
   const [gpsLoading, setGpsLoading] = useState(false);
+  const [gpsError, setGpsError] = useState<string | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [photoData, setPhotoData] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -173,12 +199,28 @@ function OrdersPageContent() {
   }, [customerQuery, step]);
 
   function captureGPS() {
-    if (!navigator.geolocation) return;
+    if (!navigator.geolocation) {
+      setGpsError("GPS is not supported on this device.");
+      return;
+    }
     setGpsLoading(true);
+    setGpsError(null);
     navigator.geolocation.getCurrentPosition(
-      (p) => { setGps({ lat: p.coords.latitude, lng: p.coords.longitude }); setGpsLoading(false); },
-      () => setGpsLoading(false),
-      { timeout: 10000, maximumAge: 60000 }
+      (p) => {
+        setGps({ lat: p.coords.latitude, lng: p.coords.longitude, accuracy: p.coords.accuracy });
+        setGpsLoading(false);
+      },
+      (err) => {
+        setGpsLoading(false);
+        if (err.code === 1) {
+          setGpsError("Location permission denied. Please allow location access in your browser settings and try again.");
+        } else if (err.code === 2) {
+          setGpsError("Location unavailable. Please move to an open area and try again.");
+        } else {
+          setGpsError("Could not capture location. Please try again.");
+        }
+      },
+      { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }
     );
   }
 
@@ -220,6 +262,7 @@ function OrdersPageContent() {
       notes,
       latitude: gps?.lat,
       longitude: gps?.lng,
+      accuracy: gps?.accuracy,
     };
 
     try {
@@ -302,13 +345,7 @@ function OrdersPageContent() {
           const price = p.salePrice ?? p.price;
           return (
             <div key={p.id} className="bg-white rounded-xl p-3 shadow-sm border border-gray-100 flex items-center gap-3">
-              {p.imageUrl ? (
-                <img src={p.imageUrl} alt={p.name} className="w-12 h-12 rounded-lg object-cover shrink-0" />
-              ) : (
-                <div className="w-12 h-12 rounded-lg bg-green-50 flex items-center justify-center shrink-0 text-green-600 text-xs font-bold">
-                  {p.serialNumber}
-                </div>
-              )}
+              <ProductThumb imageUrl={p.imageUrl} category={p.category} serialNumber={p.serialNumber} />
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1.5">
                   <span className="text-xs text-gray-400 font-mono">#{p.serialNumber}</span>
@@ -522,13 +559,22 @@ function OrdersPageContent() {
           {gps ? (
             <div className="flex items-center gap-2 text-green-600 text-sm">
               <CheckCircle size={16} />
-              {gps.lat.toFixed(5)}, {gps.lng.toFixed(5)}
-              <button onClick={() => setGps(null)} className="ml-auto text-gray-300"><X size={14} /></button>
+              <span>{gps.lat.toFixed(5)}, {gps.lng.toFixed(5)}</span>
+              {gps.accuracy && <span className="text-xs text-gray-400">±{Math.round(gps.accuracy)}m</span>}
+              <button onClick={() => { setGps(null); setGpsError(null); }} className="ml-auto text-gray-300"><X size={14} /></button>
+            </div>
+          ) : gpsError ? (
+            <div className="space-y-2">
+              <p className="text-xs text-red-500">{gpsError}</p>
+              <button onClick={captureGPS}
+                className="flex items-center gap-1.5 text-sm text-green-600 font-medium">
+                <RefreshCw size={14} /> Try Again
+              </button>
             </div>
           ) : (
             <button onClick={captureGPS} disabled={gpsLoading}
               className="flex items-center gap-2 text-sm text-green-600 font-medium disabled:opacity-50">
-              <MapPin size={16} />{gpsLoading ? "Capturing..." : "Capture GPS location"}
+              <MapPin size={16} />{gpsLoading ? "Capturing GPS..." : "Capture Current Location"}
             </button>
           )}
         </div>
@@ -608,7 +654,7 @@ function SuccessScreen({ order, onDone }: { order: PlacedOrder; onDone: () => vo
           </div>
         </div>
 
-        {/* WhatsApp button */}
+        {/* WhatsApp buttons */}
         <a
           href={order.whatsappUrl}
           target="_blank"
@@ -616,8 +662,20 @@ function SuccessScreen({ order, onDone }: { order: PlacedOrder; onDone: () => vo
           className="w-full flex items-center justify-center gap-2 bg-[#25D366] text-white py-4 rounded-xl font-semibold shadow-sm active:opacity-90"
         >
           <MessageCircle size={20} />
-          Send WhatsApp Confirmation
+          Send WhatsApp to Customer
         </a>
+
+        {order.adminWhatsappUrl && (
+          <a
+            href={order.adminWhatsappUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="w-full flex items-center justify-center gap-2 bg-[#1E4D3D] text-white py-4 rounded-xl font-semibold shadow-sm active:opacity-90"
+          >
+            <MessageCircle size={20} />
+            Notify Admin on WhatsApp
+          </a>
+        )}
 
         <a href={order.whatsappUrl} target="_blank" rel="noopener noreferrer"
           className="text-xs text-gray-400 flex items-center gap-1">

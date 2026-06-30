@@ -1,3 +1,9 @@
 {
-  "buildCommand": "DISABLE_ESLINT_PLUGIN=true next build"
+  "buildCommand": "DISABLE_ESLINT_PLUGIN=true next build",
+  "crons": [
+    {
+      "path": "/api/cron/reminders",
+      "schedule": "30 3 * * 6"
+    }
+  ]
 }

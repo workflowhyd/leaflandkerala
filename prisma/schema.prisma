@@ -369,6 +369,7 @@ model WhatsAppSetting {
   isEnabled           Boolean  @default(false)
   apiKey              String?
   phoneNumberId       String?
+  adminPhone          String?
   templateOrderPlaced String   @default("Your order has been received.")
   templateConfirmed   String   @default("Your order has been confirmed.")
   templateProcessing  String   @default("Your order is being processed.")
