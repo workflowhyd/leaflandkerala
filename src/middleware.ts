@@ -1,7 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-const PUBLIC_PAGES = ["/login", "/forgot-password"];
+const PUBLIC_PAGES = ["/login", "/forgot-password", "/register"];
 const PUBLIC_API = ["/api/auth"];
 const ADMIN_ONLY = [
   "/dashboard/employees",
