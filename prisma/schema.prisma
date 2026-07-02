@@ -130,6 +130,7 @@ model Employee {
   commissions       Commission[]
   locations         EmployeeLocation[]
   rewards           EmployeeReward[]
+  payments          EmployeePayment[]
 }
 
 model EmployeeDocument {
@@ -354,10 +355,30 @@ model Commission {
   percentage Float
   isPaid     Boolean   @default(false)
   paidAt     DateTime?
+  paymentId  String?
   createdAt  DateTime  @default(now())
 
-  employee Employee @relation(fields: [employeeId], references: [id])
-  order    Order    @relation(fields: [orderId], references: [id])
+  employee Employee         @relation(fields: [employeeId], references: [id])
+  order    Order            @relation(fields: [orderId], references: [id])
+  payment  EmployeePayment? @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+}
+
+model EmployeePayment {
+  id               String    @id @default(cuid())
+  employeeId       String
+  adminId          String
+  referenceNumber  String    @unique
+  amount           Float
+  salesAmount      Float
+  commissionAmount Float
+  ordersCount      Int       @default(0)
+  weekStart        DateTime?
+  weekEnd          DateTime?
+  notes            String?
+  createdAt        DateTime  @default(now())
+
+  employee    Employee     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  commissions Commission[]
 }
 
 model ActivityLog {

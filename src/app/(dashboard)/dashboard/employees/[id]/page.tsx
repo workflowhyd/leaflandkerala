@@ -24,6 +24,9 @@ import {
   Map,
   Clock,
   Navigation,
+  Wallet,
+  Download,
+  AlertCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
@@ -41,7 +44,7 @@ import {
 import { CustomerStatusBadge } from "@/components/customers/customer-status-badge";
 import { formatDate, formatCurrency, getStatusLabel } from "@/lib/utils";
 
-type TabId = "overview" | "documents" | "performance" | "customers" | "pincodes" | "timeline";
+type TabId = "overview" | "documents" | "performance" | "customers" | "pincodes" | "timeline" | "payments";
 
 interface Document {
   id: string;
@@ -71,6 +74,45 @@ interface OrderRow {
 
 interface Commission {
   amount: number;
+}
+
+interface PaymentOrder {
+  commissionId: string;
+  orderId: string;
+  orderNumber: string;
+  customerName: string;
+  deliveredAt: string;
+  amount: number;
+  commission: number;
+  items: { name: string; quantity: number }[];
+}
+
+interface Payment {
+  id: string;
+  referenceNumber: string;
+  amount: number;
+  salesAmount: number;
+  ordersCount: number;
+  weekStart: string | null;
+  weekEnd: string | null;
+  createdAt: string;
+  commissions?: { order: { orderNumber: string; totalAmount: number; customer: { name: string }; items: { product: { name: string }; quantity: number }[] } }[];
+}
+
+interface PendingPayout {
+  ordersCount: number;
+  salesAmount: number;
+  commissionAmount: number;
+  periodStart: string | null;
+  periodEnd: string | null;
+  orders: PaymentOrder[];
+}
+
+interface PaymentsData {
+  employee: { id: string; name: string; commissionPercent: number };
+  pendingPayout: PendingPayout;
+  payments: Payment[];
+  totalPaid: number;
 }
 
 interface TimelineEntry {
@@ -105,6 +147,7 @@ const TABS: { id: TabId; label: string; icon: React.ElementType }[] = [
   { id: "documents", label: "Documents", icon: FileText },
   { id: "performance", label: "Performance", icon: BarChart3 },
   { id: "customers", label: "Customers", icon: Users },
+  { id: "payments", label: "Payments", icon: Wallet },
   { id: "pincodes", label: "Pincode Assignments", icon: Map },
   { id: "timeline", label: "Activity Timeline", icon: Clock },
 ];
@@ -139,6 +182,12 @@ export default function EmployeeProfilePage() {
   const [timeline, setTimeline] = useState<TimelineEntry[]>([]);
   const [timelineLoading, setTimelineLoading] = useState(false);
 
+  // Payments state
+  const [paymentsData, setPaymentsData] = useState<PaymentsData | null>(null);
+  const [paymentsLoading, setPaymentsLoading] = useState(false);
+  const [showPayDialog, setShowPayDialog] = useState(false);
+  const [paying, setPaying] = useState(false);
+
   // Document upload state
   const [docType, setDocType] = useState("AADHAAR");
   const [docFile, setDocFile] = useState<File | null>(null);
@@ -171,6 +220,52 @@ export default function EmployeeProfilePage() {
       .then((d) => setTimeline(d.timeline ?? []))
       .finally(() => setTimelineLoading(false));
   }, [activeTab, id]);
+
+  const fetchPayments = useCallback(async () => {
+    if (!id) return;
+    setPaymentsLoading(true);
+    fetch(`/api/admin/employees/${id}/payments`)
+      .then((r) => r.json())
+      .then((d) => setPaymentsData(d))
+      .finally(() => setPaymentsLoading(false));
+  }, [id]);
+
+  useEffect(() => {
+    if (activeTab === "payments") fetchPayments();
+  }, [activeTab, fetchPayments]);
+
+  const handlePayNow = async () => {
+    if (!paymentsData) return;
+    // Snapshot pending orders before they're marked paid
+    const pendingSnapshot = paymentsData.pendingPayout;
+    setPaying(true);
+    try {
+      const res = await fetch(`/api/admin/employees/${id}/payments`, { method: "POST" });
+      if (!res.ok) {
+        const err = await res.json();
+        alert(err.error ?? "Payment failed");
+        return;
+      }
+      const { payment } = await res.json();
+      setShowPayDialog(false);
+      await fetchPayments();
+      // Build receipt Payment object using pre-payment order snapshot
+      const receiptPayment: Payment = {
+        ...payment,
+        commissions: pendingSnapshot.orders.map((o) => ({
+          order: {
+            orderNumber: o.orderNumber,
+            totalAmount: o.amount,
+            customer: { name: o.customerName },
+            items: o.items.map((i) => ({ product: { name: i.name }, quantity: i.quantity })),
+          },
+        })),
+      };
+      await downloadPaymentReceiptPDF(receiptPayment);
+    } finally {
+      setPaying(false);
+    }
+  };
 
   const handleStartEdit = (field: string, currentValue: string) => {
     setEditingField(field);
@@ -262,6 +357,87 @@ export default function EmployeeProfilePage() {
     employee?.orders.reduce((sum, o) => sum + o.totalAmount, 0) || 0;
   const totalCommission =
     employee?.commissions.reduce((sum, c) => sum + c.amount, 0) || 0;
+
+  async function downloadPaymentReceiptPDF(payment: Payment) {
+    if (!employee || !paymentsData) return;
+    const { default: jsPDF } = await import("jspdf");
+    const doc = new jsPDF();
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(18);
+    doc.text("LeafLand Kerala", 20, 20);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.text("Payment Receipt", 20, 27);
+    doc.setDrawColor(30, 77, 61);
+    doc.line(20, 31, 190, 31);
+
+    let y = 40;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.text("PAYMENT DETAILS", 20, y); y += 8;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.text(`Reference: ${payment.referenceNumber}`, 20, y); y += 7;
+    doc.text(`Payment Date: ${new Date(payment.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })}`, 20, y); y += 7;
+    if (payment.weekStart && payment.weekEnd) {
+      doc.text(`Period: ${new Date(payment.weekStart).toLocaleDateString("en-IN")} – ${new Date(payment.weekEnd).toLocaleDateString("en-IN")}`, 20, y); y += 7;
+    }
+    y += 3;
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.text("EMPLOYEE", 20, y); y += 8;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.text(`Name: ${employee.name}`, 20, y); y += 7;
+    doc.text(`Email: ${employee.email}`, 20, y); y += 7;
+    doc.text(`Employee ID: EMP-${employee.id.slice(-6).toUpperCase()}`, 20, y); y += 12;
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.text("SUMMARY", 20, y); y += 8;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.text(`Orders Included: ${payment.ordersCount}`, 20, y); y += 7;
+    doc.text(`Total Sales: ₹${payment.salesAmount.toLocaleString("en-IN")}`, 20, y); y += 7;
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(30, 77, 61);
+    doc.text(`Commission Paid: ₹${Math.round(payment.amount).toLocaleString("en-IN")}`, 20, y);
+    doc.setTextColor(26, 26, 26);
+    doc.setFont("helvetica", "normal");
+    y += 12;
+
+    if (payment.commissions && payment.commissions.length > 0) {
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(11);
+      doc.text("ORDER DETAILS", 20, y); y += 8;
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9);
+      for (const comm of payment.commissions) {
+        if (y > 255) { doc.addPage(); y = 20; }
+        const o = comm.order;
+        doc.setFont("helvetica", "bold");
+        doc.text(`${o.orderNumber} · ${o.customer.name} · ₹${o.totalAmount.toLocaleString("en-IN")}`, 20, y); y += 5;
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(100, 116, 139);
+        const itemStr = o.items.map((i: { product: { name: string }; quantity: number }) => `${i.product.name} ×${i.quantity}`).join(", ");
+        const lines = doc.splitTextToSize(itemStr, 160);
+        for (const line of lines) {
+          if (y > 275) { doc.addPage(); y = 20; doc.setTextColor(100, 116, 139); }
+          doc.text(`  ${line}`, 20, y); y += 5;
+        }
+        doc.setTextColor(26, 26, 26);
+        y += 3;
+      }
+    }
+
+    doc.setFont("helvetica", "italic");
+    doc.setFontSize(8);
+    doc.setTextColor(148, 163, 184);
+    doc.text(`Generated on ${new Date().toLocaleDateString("en-IN")} · LeafLand Kerala ERP`, 20, 285);
+    doc.save(`Receipt_${payment.referenceNumber}.pdf`);
+  }
 
   if (loading) {
     return (
@@ -679,6 +855,191 @@ export default function EmployeeProfilePage() {
             )}
           </CardContent>
         </Card>
+      )}
+
+      {activeTab === "payments" && (
+        <div className="flex flex-col gap-6">
+          {paymentsLoading ? (
+            <div className="flex justify-center py-16">
+              <div className="h-8 w-8 animate-spin rounded-full border-2 border-[#1E4D3D] border-t-transparent" />
+            </div>
+          ) : !paymentsData ? (
+            <div className="flex items-center gap-2 text-[#64748b]">
+              <AlertCircle className="h-4 w-4" />
+              <span className="text-sm">Failed to load payment data.</span>
+            </div>
+          ) : (
+            <>
+              {/* Summary Cards */}
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+                <div className="rounded-xl border border-[#e2e8f0] bg-white p-4">
+                  <p className="text-xs text-[#64748b] uppercase tracking-wide">Available Earnings</p>
+                  <p className="mt-1 text-2xl font-bold text-[#1E4D3D]">
+                    {formatCurrency(paymentsData.pendingPayout.commissionAmount)}
+                  </p>
+                  <p className="text-xs text-[#94a3b8] mt-0.5">{paymentsData.pendingPayout.ordersCount} delivered orders unpaid</p>
+                </div>
+                <div className="rounded-xl border border-[#e2e8f0] bg-white p-4">
+                  <p className="text-xs text-[#64748b] uppercase tracking-wide">Total Paid (All Time)</p>
+                  <p className="mt-1 text-2xl font-bold text-[#1a1a1a]">{formatCurrency(paymentsData.totalPaid)}</p>
+                  <p className="text-xs text-[#94a3b8] mt-0.5">{paymentsData.payments.length} payments made</p>
+                </div>
+                <div className="col-span-2 sm:col-span-1 flex items-center justify-end">
+                  <Button
+                    variant="default"
+                    disabled={paymentsData.pendingPayout.ordersCount === 0}
+                    onClick={() => setShowPayDialog(true)}
+                    className="gap-2 w-full sm:w-auto"
+                  >
+                    <Wallet className="h-4 w-4" />
+                    Pay Now
+                  </Button>
+                </div>
+              </div>
+
+              {/* Pay Now Confirmation Dialog */}
+              {showPayDialog && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+                  <div className="w-full max-w-md rounded-2xl bg-white shadow-xl">
+                    <div className="flex items-center justify-between border-b border-[#e2e8f0] px-6 py-4">
+                      <h3 className="font-semibold text-[#1a1a1a]">Confirm Payment</h3>
+                      <button onClick={() => setShowPayDialog(false)} className="rounded p-1 text-[#94a3b8] hover:text-[#1a1a1a]">
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                    <div className="px-6 py-5 space-y-3 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-[#64748b]">Employee</span>
+                        <span className="font-medium text-[#1a1a1a]">{employee.name}</span>
+                      </div>
+                      {paymentsData.pendingPayout.periodStart && (
+                        <div className="flex justify-between">
+                          <span className="text-[#64748b]">Period</span>
+                          <span className="font-medium text-[#1a1a1a]">
+                            {new Date(paymentsData.pendingPayout.periodStart).toLocaleDateString("en-IN")}
+                            {" – "}
+                            {paymentsData.pendingPayout.periodEnd
+                              ? new Date(paymentsData.pendingPayout.periodEnd).toLocaleDateString("en-IN")
+                              : "—"}
+                          </span>
+                        </div>
+                      )}
+                      <div className="flex justify-between">
+                        <span className="text-[#64748b]">Orders Included</span>
+                        <span className="font-medium text-[#1a1a1a]">{paymentsData.pendingPayout.ordersCount}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-[#64748b]">Total Sales</span>
+                        <span className="font-medium text-[#1a1a1a]">{formatCurrency(paymentsData.pendingPayout.salesAmount)}</span>
+                      </div>
+                      <div className="flex justify-between border-t border-[#e2e8f0] pt-3">
+                        <span className="font-semibold text-[#1a1a1a]">Commission to Pay</span>
+                        <span className="text-lg font-bold text-[#1E4D3D]">
+                          {formatCurrency(paymentsData.pendingPayout.commissionAmount)}
+                        </span>
+                      </div>
+                      <p className="text-xs text-[#94a3b8]">A PDF receipt will be generated after payment. All included orders will be marked as paid.</p>
+                    </div>
+                    <div className="flex gap-3 border-t border-[#e2e8f0] px-6 py-4">
+                      <Button variant="outline" className="flex-1" onClick={() => setShowPayDialog(false)} disabled={paying}>
+                        Cancel
+                      </Button>
+                      <Button variant="default" className="flex-1" onClick={handlePayNow} loading={paying}>
+                        Confirm & Pay
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Pending Orders Preview */}
+              {paymentsData.pendingPayout.orders.length > 0 && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <ShoppingCart className="h-4 w-4 text-[#3B7A57]" />
+                      Pending Orders ({paymentsData.pendingPayout.ordersCount})
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="pt-0 px-0 pb-0">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Order</TableHead>
+                          <TableHead>Customer</TableHead>
+                          <TableHead>Products</TableHead>
+                          <TableHead className="text-right">Amount</TableHead>
+                          <TableHead className="text-right">Commission</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {paymentsData.pendingPayout.orders.map((o) => (
+                          <TableRow key={o.orderId}>
+                            <TableCell className="font-mono text-xs text-[#1E4D3D]">{o.orderNumber}</TableCell>
+                            <TableCell className="text-sm">{o.customerName}</TableCell>
+                            <TableCell className="text-xs text-[#64748b] max-w-[200px]">
+                              {o.items.map((i) => `${i.name} ×${i.quantity}`).join(", ")}
+                            </TableCell>
+                            <TableCell className="text-right font-medium">{formatCurrency(o.amount)}</TableCell>
+                            <TableCell className="text-right text-green-700 font-medium">{formatCurrency(o.commission)}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Payment History */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <TrendingUp className="h-4 w-4 text-[#3B7A57]" />
+                    Payment History
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-0 px-0 pb-0">
+                  {paymentsData.payments.length === 0 ? (
+                    <div className="px-6 pb-6 pt-2 text-sm text-[#64748b]">No payments made yet.</div>
+                  ) : (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Reference</TableHead>
+                          <TableHead>Date</TableHead>
+                          <TableHead>Orders</TableHead>
+                          <TableHead>Sales</TableHead>
+                          <TableHead className="text-right">Paid</TableHead>
+                          <TableHead />
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {paymentsData.payments.map((p) => (
+                          <TableRow key={p.id}>
+                            <TableCell className="font-mono text-xs text-[#1E4D3D]">{p.referenceNumber}</TableCell>
+                            <TableCell className="text-sm">{formatDate(p.createdAt)}</TableCell>
+                            <TableCell className="text-sm">{p.ordersCount}</TableCell>
+                            <TableCell className="text-sm">{formatCurrency(p.salesAmount)}</TableCell>
+                            <TableCell className="text-right font-semibold text-[#1E4D3D]">{formatCurrency(p.amount)}</TableCell>
+                            <TableCell>
+                              <button
+                                onClick={() => downloadPaymentReceiptPDF(p)}
+                                className="flex items-center gap-1 text-xs text-[#64748b] hover:text-[#1E4D3D] transition-colors"
+                              >
+                                <Download className="h-3.5 w-3.5" />
+                                Receipt
+                              </button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  )}
+                </CardContent>
+              </Card>
+            </>
+          )}
+        </div>
       )}
 
       {activeTab === "pincodes" && (

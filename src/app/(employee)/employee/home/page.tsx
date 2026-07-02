@@ -14,7 +14,6 @@ interface HomeData {
   commissionPercent: number;
   daysUntilDelivery: number;
   weekDays: { label: string; date: string; done: boolean; isToday: boolean }[];
-  // Weekly performance (delivered orders only)
   weeklySales: number;
   weeklyOrdersDelivered: number;
   weeklyCommission: number;
@@ -22,6 +21,10 @@ interface HomeData {
   isEligibleForBonus: boolean;
   bonusThreshold: number;
   bonusRate: number;
+  availableEarnings: number;
+  lastPaymentDate: string | null;
+  lastPaymentAmount: number | null;
+  lastPaymentRef: string | null;
 }
 
 interface OfferItem {
@@ -180,15 +183,21 @@ export default function EmployeeHome() {
         <div className="mt-4 bg-green-700/60 rounded-2xl px-4 py-3 flex items-center justify-between">
           <div>
             <p className="text-green-200 text-xs font-medium flex items-center gap-1">
-              <TrendingUp size={13} /> Total Earnings
+              <IndianRupee size={13} /> Available Earnings
             </p>
             <p className="text-white text-3xl font-bold mt-0.5">
-              ₹{Math.round(data?.totalEarnings ?? 0).toLocaleString("en-IN")}
+              ₹{Math.round(data?.availableEarnings ?? 0).toLocaleString("en-IN")}
             </p>
-            <p className="text-green-300 text-xs mt-0.5">{data?.commissionPercent}% base rate</p>
+            <p className="text-green-300 text-xs mt-0.5">
+              {data?.lastPaymentDate
+                ? `Last paid: ${new Date(data.lastPaymentDate).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}`
+                : "No payments yet"}
+            </p>
           </div>
-          <div className="w-14 h-14 rounded-full bg-white/10 flex items-center justify-center">
-            <IndianRupee size={28} className="text-white" />
+          <div className="text-right">
+            <p className="text-green-300 text-xs">Total Earned</p>
+            <p className="text-white text-lg font-bold">₹{Math.round(data?.totalEarnings ?? 0).toLocaleString("en-IN")}</p>
+            <p className="text-green-400 text-xs mt-0.5">{data?.commissionPercent}% base</p>
           </div>
         </div>
       </div>

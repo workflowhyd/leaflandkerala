@@ -27,7 +27,7 @@ export async function GET() {
 
   const { weekStart, weekEnd } = getWeekRange();
 
-  const [weekOrders, pendingOrders, totalCommission, weeklyInfo] = await Promise.all([
+  const [weekOrders, pendingOrders, totalCommission, weeklyInfo, availableEarningsAgg, lastPayment] = await Promise.all([
     prisma.order.count({
       where: {
         employeeId: employee.id,
@@ -47,6 +47,19 @@ export async function GET() {
       _sum: { amount: true },
     }),
     getWeeklyCommission(employee.id, weekStart, weekEnd),
+    prisma.commission.aggregate({
+      where: {
+        employeeId: employee.id,
+        isPaid: false,
+        order: { status: "DELIVERED" },
+      },
+      _sum: { amount: true },
+    }),
+    prisma.employeePayment.findFirst({
+      where: { employeeId: employee.id },
+      orderBy: { createdAt: "desc" },
+      select: { createdAt: true, amount: true, referenceNumber: true },
+    }),
   ]);
 
   const today = new Date();
@@ -73,13 +86,11 @@ export async function GET() {
     name: session.name,
     weekOrders,
     pendingOrders,
-    // Legacy field kept for compatibility
     estimatedCommission: weeklyInfo.weeklyCommission,
     totalEarnings: totalCommission._sum.amount ?? 0,
     commissionPercent: employee.commissionPercent,
     daysUntilDelivery,
     weekDays,
-    // New weekly performance fields
     weeklySales: weeklyInfo.weeklySales,
     weeklyOrdersDelivered: weeklyInfo.weeklyOrdersDelivered,
     weeklyCommission: weeklyInfo.weeklyCommission,
@@ -87,5 +98,9 @@ export async function GET() {
     isEligibleForBonus: weeklyInfo.isEligible,
     bonusThreshold: weeklyInfo.threshold,
     bonusRate: weeklyInfo.bonusRate,
+    availableEarnings: availableEarningsAgg._sum.amount ?? 0,
+    lastPaymentDate: lastPayment?.createdAt ?? null,
+    lastPaymentAmount: lastPayment?.amount ?? null,
+    lastPaymentRef: lastPayment?.referenceNumber ?? null,
   });
 }

@@ -68,18 +68,36 @@ async function downloadWeekPDF(data: WeekData) {
   y += 8;
 
   for (const emp of data.employees) {
-    if (y > 260) { doc.addPage(); y = 20; }
+    if (y > 250) { doc.addPage(); y = 20; }
     doc.setFont("helvetica", "bold");
     doc.setFontSize(10);
+    doc.setTextColor(26, 26, 26);
     doc.text(`${emp.name} — ${emp.ordersCount} orders · ₹${emp.totalRevenue.toLocaleString("en-IN")} · Commission: ₹${Math.round(emp.commission).toLocaleString("en-IN")}`, 20, y);
-    y += 6;
+    y += 7;
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9);
-    doc.setTextColor(100, 116, 139);
     for (const order of emp.orders) {
-      if (y > 270) { doc.addPage(); y = 20; doc.setTextColor(100, 116, 139); }
-      doc.text(`  ${order.orderNumber} · ${order.customer.name} · ₹${order.totalAmount.toLocaleString("en-IN")} · ${order.status}`, 20, y);
+      if (y > 260) { doc.addPage(); y = 20; }
+      // Order header line
+      doc.setTextColor(30, 77, 61);
+      doc.text(`  ${order.orderNumber}`, 20, y);
+      doc.setTextColor(26, 26, 26);
+      doc.text(` · ${order.customer.name}${order.customer.village ? ` (${order.customer.village})` : ""} · ₹${order.totalAmount.toLocaleString("en-IN")}`, 42, y);
+      doc.setTextColor(100, 116, 139);
+      doc.text(` [${order.status.replace(/_/g, " ")}]`, 155, y);
       y += 5;
+      // Product names per order
+      if (order.items && order.items.length > 0) {
+        doc.setTextColor(100, 116, 139);
+        const itemStr = order.items.map((i) => `${i.product.name} ×${i.quantity}`).join(", ");
+        const lines = doc.splitTextToSize(`    ${itemStr}`, 165);
+        for (const line of lines) {
+          if (y > 275) { doc.addPage(); y = 20; doc.setTextColor(100, 116, 139); }
+          doc.text(line, 20, y);
+          y += 4;
+        }
+      }
+      y += 2;
     }
     doc.setTextColor(26, 26, 26);
     y += 4;

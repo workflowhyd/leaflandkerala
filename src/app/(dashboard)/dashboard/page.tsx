@@ -2,7 +2,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { RecentOrdersTable } from "@/components/dashboard/recent-orders-table";
 import { TopEmployees } from "@/components/dashboard/top-employees";
 import {
-  ShoppingCart, Truck, Users, TrendingUp, CalendarCheck, UserPlus, Clock,
+  ShoppingCart, Truck, Users, TrendingUp, CalendarCheck, UserPlus, Clock, Wallet,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { prisma } from "@/lib/prisma";
@@ -37,63 +37,87 @@ async function getDashboardData() {
     upcomingSundayEnd.setHours(23, 59, 59, 999);
 
     const [
-      todayOrders,
-      pendingOrders,
-      weeklyOrders,
-      activeEmployees,
-      weeklyRevenue,
-      recentOrders,
-      topEmployees,
-      sundayDeliveries,
-      pendingRegistrations,
-      weeklyOrdersByDay,
+      [
+        todayOrders,
+        pendingOrders,
+        weeklyOrders,
+        activeEmployees,
+        weeklyRevenue,
+        recentOrders,
+        topEmployees,
+        sundayDeliveries,
+        pendingRegistrations,
+        weeklyOrdersByDay,
+      ],
+      [
+        pendingPayoutEmployees,
+        pendingPayoutTotal,
+        paymentsThisWeek,
+        totalCommissionPaid,
+      ],
     ] = await Promise.all([
-      prisma.order.count({ where: { createdAt: { gte: startOfDay, lte: endOfDay }, status: { not: "CANCELLED" } } }),
-      prisma.order.count({ where: { status: { in: ["NEW", "CONFIRMED", "PROCESSING", "PACKED", "OUT_FOR_DELIVERY"] } } }),
-      prisma.order.count({ where: { createdAt: { gte: weekStart, lte: weekEnd }, status: { not: "CANCELLED" } } }),
-      prisma.employee.count({ where: { isActive: true } }),
-      prisma.order.aggregate({
-        _sum: { totalAmount: true },
-        where: { createdAt: { gte: weekStart, lte: weekEnd }, status: "DELIVERED" },
-      }),
-      prisma.order.findMany({
-        take: 8,
-        orderBy: { createdAt: "desc" },
-        include: {
-          customer: { select: { name: true, mobile: true } },
-          employee: { select: { name: true } },
-        },
-      }),
-      prisma.employee.findMany({
-        take: 5,
-        include: {
-          commissions: { select: { amount: true } },
-          _count: { select: { orders: true, customers: true } },
-        },
-      }),
-      prisma.order.findMany({
-        where: { deliveryDate: { gte: upcomingSunday, lte: upcomingSundayEnd }, status: { notIn: ["DELIVERED", "CANCELLED"] } },
-        include: {
-          customer: { select: { name: true, mobile: true, village: true } },
-          employee: { select: { name: true } },
-          items: { select: { quantity: true, subtotal: true } },
-        },
-        orderBy: { totalAmount: "desc" },
-      }),
-      prisma.employeeRegistrationRequest.findMany({
-        where: { status: "PENDING" },
-        orderBy: { submittedAt: "desc" },
-        take: 5,
-      }),
-      // Daily orders this week for chart
-      prisma.$queryRaw<{ d: Date; cnt: bigint }[]>`
-        SELECT DATE_TRUNC('day', "createdAt") AS d, COUNT(*) AS cnt
-        FROM "Order"
-        WHERE "createdAt" >= ${weekStart} AND "createdAt" <= ${weekEnd}
-          AND "status" != 'CANCELLED'
-        GROUP BY DATE_TRUNC('day', "createdAt")
-        ORDER BY d
-      `,
+      Promise.all([
+        prisma.order.count({ where: { createdAt: { gte: startOfDay, lte: endOfDay }, status: { not: "CANCELLED" } } }),
+        prisma.order.count({ where: { status: { in: ["NEW", "CONFIRMED", "PROCESSING", "PACKED", "OUT_FOR_DELIVERY"] } } }),
+        prisma.order.count({ where: { createdAt: { gte: weekStart, lte: weekEnd }, status: { not: "CANCELLED" } } }),
+        prisma.employee.count({ where: { isActive: true } }),
+        prisma.order.aggregate({
+          _sum: { totalAmount: true },
+          where: { createdAt: { gte: weekStart, lte: weekEnd }, status: "DELIVERED" },
+        }),
+        prisma.order.findMany({
+          take: 8,
+          orderBy: { createdAt: "desc" },
+          include: {
+            customer: { select: { name: true, mobile: true } },
+            employee: { select: { name: true } },
+          },
+        }),
+        prisma.employee.findMany({
+          take: 5,
+          include: {
+            commissions: { select: { amount: true } },
+            _count: { select: { orders: true, customers: true } },
+          },
+        }),
+        prisma.order.findMany({
+          where: { deliveryDate: { gte: upcomingSunday, lte: upcomingSundayEnd }, status: { notIn: ["DELIVERED", "CANCELLED"] } },
+          include: {
+            customer: { select: { name: true, mobile: true, village: true } },
+            employee: { select: { name: true } },
+            items: { select: { quantity: true, subtotal: true } },
+          },
+          orderBy: { totalAmount: "desc" },
+        }),
+        prisma.employeeRegistrationRequest.findMany({
+          where: { status: "PENDING" },
+          orderBy: { submittedAt: "desc" },
+          take: 5,
+        }),
+        prisma.$queryRaw<{ d: Date; cnt: bigint }[]>`
+          SELECT DATE_TRUNC('day', "createdAt") AS d, COUNT(*) AS cnt
+          FROM "Order"
+          WHERE "createdAt" >= ${weekStart} AND "createdAt" <= ${weekEnd}
+            AND "status" != 'CANCELLED'
+          GROUP BY DATE_TRUNC('day', "createdAt")
+          ORDER BY d
+        `,
+      ]),
+      Promise.all([
+        prisma.commission.findMany({
+          where: { isPaid: false, order: { status: "DELIVERED" } },
+          distinct: ["employeeId"],
+          select: { employeeId: true },
+        }),
+        prisma.commission.aggregate({
+          where: { isPaid: false, order: { status: "DELIVERED" } },
+          _sum: { amount: true },
+        }),
+        prisma.employeePayment.count({
+          where: { createdAt: { gte: weekStart, lte: weekEnd } },
+        }),
+        prisma.employeePayment.aggregate({ _sum: { amount: true } }),
+      ]),
     ]);
 
     const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -129,6 +153,10 @@ async function getDashboardData() {
       upcomingSunday,
       pendingRegistrations,
       chartData,
+      payoutAwaitingCount: pendingPayoutEmployees.length,
+      payoutPendingTotal: pendingPayoutTotal._sum.amount ?? 0,
+      paymentsThisWeek,
+      totalCommissionPaid: totalCommissionPaid._sum.amount ?? 0,
     };
   } catch {
     return null;
@@ -189,6 +217,33 @@ export default async function DashboardPage() {
             <p className="text-xs text-[#64748b] mt-0.5">{label}</p>
           </div>
         ))}
+      </div>
+
+      {/* Payout summary cards */}
+      <div>
+        <div className="flex items-center gap-2 mb-3">
+          <Wallet className="h-4 w-4 text-[#1E4D3D]" />
+          <h2 className="text-sm font-semibold text-[#1a1a1a]">Employee Payouts</h2>
+          <Link href="/dashboard/employees" className="ml-auto text-xs font-semibold text-[#3B7A57] hover:underline">
+            Manage employees →
+          </Link>
+        </div>
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          {[
+            { label: "Awaiting Payment", value: data?.payoutAwaitingCount ?? 0, color: "text-red-600", bg: "bg-red-50", suffix: " employees" },
+            { label: "Total Pending Payout", value: formatCurrency(data?.payoutPendingTotal ?? 0), color: "text-orange-600", bg: "bg-orange-50", suffix: "" },
+            { label: "Payments This Week", value: data?.paymentsThisWeek ?? 0, color: "text-blue-600", bg: "bg-blue-50", suffix: "" },
+            { label: "Total Commission Paid", value: formatCurrency(data?.totalCommissionPaid ?? 0), color: "text-green-700", bg: "bg-green-50", suffix: "" },
+          ].map(({ label, value, color, bg }) => (
+            <div key={label} className="rounded-xl bg-white border border-[#e2e8f0] p-4">
+              <div className={`inline-flex h-9 w-9 items-center justify-center rounded-lg ${bg} mb-2`}>
+                <Wallet className={`h-4 w-4 ${color}`} />
+              </div>
+              <p className={`text-xl font-bold leading-tight ${color}`}>{value}</p>
+              <p className="text-xs text-[#64748b] mt-0.5">{label}</p>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Weekly Orders Chart */}
