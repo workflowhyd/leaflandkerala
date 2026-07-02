@@ -131,7 +131,8 @@ export async function POST(request: NextRequest) {
       select: { isEnabled: true, templateOrderPlaced: true, adminPhone: true },
     }).catch(() => null);
 
-    // Retry up to 3 times to handle rare order-number collisions
+    // Retry up to 3 times to handle rare order-number collisions.
+    // Transaction is kept minimal (order + commission + stock) to avoid timeout.
     let order: Awaited<ReturnType<typeof prisma.order.create>> | null = null;
     let lastError: unknown;
     for (let attempt = 0; attempt < 3; attempt++) {
@@ -175,71 +176,8 @@ export async function POST(request: NextRequest) {
             )
           );
 
-          await tx.notification.create({
-            data: {
-              orderId: created.id,
-              type: "ORDER_PLACED",
-              recipient: customer.mobile,
-              message: fillTemplate(
-                waSettings?.templateOrderPlaced ??
-                  "Hello {{Customer Name}}, your order {{Order Number}} has been placed. Delivery on {{Delivery Date}}.",
-                {
-                  "Customer Name": customer.name,
-                  "Order Number": created.orderNumber,
-                  "Delivery Date": deliveryDateStr,
-                }
-              ),
-              isSent: false,
-            },
-          });
-
-          if (latitude && longitude) {
-            await tx.customerLocation.upsert({
-              where: { customerId },
-              update: { latitude, longitude, capturedAt: new Date() },
-              create: { customerId, latitude, longitude },
-            });
-          }
-
-          if (["LEAD", "VISITED", "INTERESTED"].includes(customer.status)) {
-            await tx.customer.update({
-              where: { id: customerId },
-              data: { status: "ORDER_PLACED" },
-            });
-          }
-
-          await tx.activityLog.create({
-            data: {
-              userId: session.userId,
-              customerId,
-              type: "ORDER_CREATE",
-              description: `Order ${created.orderNumber} created for ${customer.name} — ₹${totalAmount.toLocaleString("en-IN")}`,
-              metadata: {
-                orderId: created.id,
-                orderNumber: created.orderNumber,
-                totalAmount,
-                itemCount: orderItems.length,
-                employeeId: employee.id,
-                latitude,
-                longitude,
-              },
-            },
-          });
-
-          if (latitude && longitude) {
-            await tx.activityLog.create({
-              data: {
-                userId: session.userId,
-                customerId,
-                type: "CUSTOMER_VISIT",
-                description: `GPS captured at ${customer.name}'s location`,
-                metadata: { latitude, longitude, orderId: created.id },
-              },
-            });
-          }
-
           return created;
-        });
+        }, { timeout: 15000 });
         break; // success — exit retry loop
       } catch (err: unknown) {
         // Retry only on unique constraint violation (P2002 — order number collision)
@@ -257,6 +195,73 @@ export async function POST(request: NextRequest) {
     }
 
     if (!order) throw lastError;
+
+    // Non-critical side effects run after the transaction commits.
+    // Failures here are logged but do not affect the order response.
+    await Promise.all([
+      prisma.notification.create({
+        data: {
+          orderId: order.id,
+          type: "ORDER_PLACED",
+          recipient: customer.mobile,
+          message: fillTemplate(
+            waSettings?.templateOrderPlaced ??
+              "Hello {{Customer Name}}, your order {{Order Number}} has been placed. Delivery on {{Delivery Date}}.",
+            {
+              "Customer Name": customer.name,
+              "Order Number": order.orderNumber,
+              "Delivery Date": deliveryDateStr,
+            }
+          ),
+          isSent: false,
+        },
+      }).catch((e) => console.error("[orders] notification.create failed:", e)),
+
+      latitude && longitude
+        ? prisma.customerLocation.upsert({
+            where: { customerId },
+            update: { latitude, longitude, capturedAt: new Date() },
+            create: { customerId, latitude, longitude },
+          }).catch((e) => console.error("[orders] customerLocation.upsert failed:", e))
+        : Promise.resolve(),
+
+      ["LEAD", "VISITED", "INTERESTED"].includes(customer.status)
+        ? prisma.customer.update({
+            where: { id: customerId },
+            data: { status: "ORDER_PLACED" },
+          }).catch((e) => console.error("[orders] customer.update status failed:", e))
+        : Promise.resolve(),
+
+      prisma.activityLog.create({
+        data: {
+          userId: session.userId,
+          customerId,
+          type: "ORDER_CREATE",
+          description: `Order ${order.orderNumber} created for ${customer.name} — ₹${totalAmount.toLocaleString("en-IN")}`,
+          metadata: {
+            orderId: order.id,
+            orderNumber: order.orderNumber,
+            totalAmount,
+            itemCount: orderItems.length,
+            employeeId: employee.id,
+            latitude,
+            longitude,
+          },
+        },
+      }).catch((e) => console.error("[orders] activityLog ORDER_CREATE failed:", e)),
+
+      latitude && longitude
+        ? prisma.activityLog.create({
+            data: {
+              userId: session.userId,
+              customerId,
+              type: "CUSTOMER_VISIT",
+              description: `GPS captured at ${customer.name}'s location`,
+              metadata: { latitude, longitude, orderId: order.id },
+            },
+          }).catch((e) => console.error("[orders] activityLog CUSTOMER_VISIT failed:", e))
+        : Promise.resolve(),
+    ]);
 
     const whatsappMessage = fillTemplate(
       waSettings?.templateOrderPlaced ??
