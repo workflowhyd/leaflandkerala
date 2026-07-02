@@ -4,7 +4,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 import {
   ArrowLeft, Plus, Minus, Search, Trash2, MapPin, CheckCircle,
   ChevronRight, ShoppingCart, X, AlertCircle, Camera, MessageCircle,
-  Home, ExternalLink, RefreshCw,
+  Home, ExternalLink, RefreshCw, Navigation,
 } from "lucide-react";
 import { useCart, CartItem } from "@/components/employee/cart-context";
 import { compressImage } from "@/lib/compress-image";
@@ -42,7 +42,7 @@ interface PlacedOrder {
   customer: { name: string; mobile: string };
 }
 
-type Step = "list" | "products" | "cart" | "customer" | "photo" | "confirm" | "success";
+type Step = "list" | "products" | "cart" | "customer" | "gps" | "photo" | "confirm" | "success";
 
 const STATUS_COLOR: Record<string, string> = {
   NEW: "bg-blue-100 text-blue-700",
@@ -247,7 +247,9 @@ function OrdersPageContent() {
       const data = await res.json();
       setSelectedCustomer(data.customer ?? data);
       setShowNewCustomer(false);
-      setStep("photo");
+      setGps(null);
+      setGpsError(null);
+      setStep("gps");
     }
   }
 
@@ -294,9 +296,13 @@ function OrdersPageContent() {
         setSubmitError(data.error ?? "Failed to submit. Please try again.");
       }
     } catch {
-      enqueueOrder(payload);
-      clearCart();
-      setStep("list");
+      if (!navigator.onLine) {
+        enqueueOrder(payload);
+        clearCart();
+        setStep("list");
+      } else {
+        setSubmitError("Connection error. Please check your internet and try again.");
+      }
     } finally {
       setSubmitting(false);
     }
@@ -439,7 +445,7 @@ function OrdersPageContent() {
           </div>
           <div className="flex-1 overflow-y-auto px-4 space-y-2">
             {customers.map((c) => (
-              <button key={c.id} onClick={() => { setSelectedCustomer(c); setStep("photo"); }}
+              <button key={c.id} onClick={() => { setSelectedCustomer(c); setGps(null); setGpsError(null); setStep("gps"); }}
                 className="w-full bg-white rounded-xl p-3 shadow-sm border border-gray-100 text-left flex items-center gap-3 active:bg-green-50">
                 <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center text-green-700 font-bold text-sm shrink-0">{c.name[0]}</div>
                 <div className="flex-1 min-w-0">
@@ -484,9 +490,20 @@ function OrdersPageContent() {
     </div>
   );
 
+  if (step === "gps") return (
+    <GpsStep
+      gps={gps}
+      gpsLoading={gpsLoading}
+      gpsError={gpsError}
+      onCapture={captureGPS}
+      onContinue={() => setStep("photo")}
+      onBack={() => setStep("customer")}
+    />
+  );
+
   if (step === "photo") return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
-      <Header onBack={() => setStep("customer")} title="House Photo" />
+      <Header onBack={() => setStep("gps")} title="House Photo" />
 
       <div className="flex-1 flex flex-col items-center justify-center px-4 gap-4">
         {photoPreview ? (
@@ -787,4 +804,82 @@ function QtyBtn({ onClick, icon }: { onClick: () => void; icon: React.ReactNode 
 
 function Spinner({ className = "border-white" }: { className?: string }) {
   return <div className={`w-4 h-4 border-2 ${className} border-t-transparent rounded-full animate-spin`} />;
+}
+
+function GpsStep({
+  gps, gpsLoading, gpsError, onCapture, onContinue, onBack,
+}: {
+  gps: { lat: number; lng: number; accuracy?: number } | null;
+  gpsLoading: boolean;
+  gpsError: string | null;
+  onCapture: () => void;
+  onContinue: () => void;
+  onBack: () => void;
+}) {
+  useEffect(() => {
+    if (!gps && !gpsLoading) onCapture();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return (
+    <div className="min-h-screen bg-gray-50 flex flex-col">
+      <Header onBack={onBack} title="Capture Location" />
+      <div className="flex-1 flex flex-col items-center justify-center px-6 gap-6">
+        <div className={`w-24 h-24 rounded-full flex items-center justify-center ${gps ? "bg-green-100" : "bg-gray-100"}`}>
+          {gpsLoading ? (
+            <div className="w-10 h-10 border-4 border-green-500 border-t-transparent rounded-full animate-spin" />
+          ) : gps ? (
+            <CheckCircle size={44} className="text-green-500" />
+          ) : (
+            <Navigation size={44} className="text-gray-400" />
+          )}
+        </div>
+
+        {gps ? (
+          <div className="text-center">
+            <p className="font-semibold text-gray-800">Location Captured!</p>
+            <p className="text-sm text-gray-500 mt-1">{gps.lat.toFixed(5)}, {gps.lng.toFixed(5)}</p>
+            {gps.accuracy && <p className="text-xs text-gray-400 mt-0.5">±{Math.round(gps.accuracy)}m accuracy</p>}
+          </div>
+        ) : gpsLoading ? (
+          <div className="text-center">
+            <p className="font-semibold text-gray-700">Getting your location...</p>
+            <p className="text-sm text-gray-400 mt-1">Please wait, this may take a few seconds</p>
+          </div>
+        ) : (
+          <div className="text-center">
+            <p className="font-semibold text-gray-700">Location Required</p>
+            <p className="text-sm text-gray-400 mt-1">
+              {gpsError ?? "Tap below to capture your current GPS location"}
+            </p>
+          </div>
+        )}
+
+        {gpsError && (
+          <div className="w-full bg-red-50 border border-red-100 rounded-xl px-4 py-3 text-red-600 text-xs text-center">
+            {gpsError}
+          </div>
+        )}
+      </div>
+
+      <div className="px-4 pb-6 space-y-3">
+        {!gps && (
+          <button onClick={onCapture} disabled={gpsLoading}
+            className="w-full bg-green-600 text-white py-4 rounded-xl font-semibold disabled:opacity-60 flex items-center justify-center gap-2">
+            <Navigation size={18} />{gpsLoading ? "Capturing..." : "Capture My Location"}
+          </button>
+        )}
+        {gps && (
+          <button onClick={onContinue}
+            className="w-full bg-green-600 text-white py-4 rounded-xl font-semibold flex items-center justify-center gap-2">
+            <ChevronRight size={18} /> Continue to Photo
+          </button>
+        )}
+        <button onClick={onContinue}
+          className="w-full text-gray-500 py-3 text-sm font-medium">
+          Skip Location
+        </button>
+      </div>
+    </div>
+  );
 }

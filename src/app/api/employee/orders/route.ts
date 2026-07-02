@@ -49,7 +49,7 @@ export async function GET(request: NextRequest) {
     select: {
       id: true, orderNumber: true, status: true, totalAmount: true,
       notes: true, deliveryDate: true, createdAt: true,
-      customer: { select: { id: true, name: true, mobile: true, village: true } },
+      customer: { select: { id: true, name: true, mobile: true, village: true, address: true } },
       items: {
         select: {
           quantity: true, price: true, subtotal: true,

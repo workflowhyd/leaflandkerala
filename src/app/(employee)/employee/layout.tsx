@@ -2,16 +2,16 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef } from "react";
-import { Home, ShoppingCart, Users, User } from "lucide-react";
+import { Home, ShoppingCart, Truck, User } from "lucide-react";
 import { CartProvider } from "@/components/employee/cart-context";
 import { useSessionTimeout } from "@/hooks/use-session-timeout";
 import { SessionTimeoutModal } from "@/components/ui/session-timeout-modal";
 
 const NAV = [
-  { href: "/employee/home",      icon: Home,        label: "Home" },
-  { href: "/employee/orders",    icon: ShoppingCart, label: "Orders" },
-  { href: "/employee/customers", icon: Users,        label: "Customers" },
-  { href: "/employee/profile",   icon: User,         label: "Profile" },
+  { href: "/employee/home",     icon: Home,        label: "Home" },
+  { href: "/employee/orders",   icon: ShoppingCart, label: "Orders" },
+  { href: "/employee/delivery", icon: Truck,        label: "Delivery" },
+  { href: "/employee/profile",  icon: User,         label: "Profile" },
 ];
 
 const LOCATION_INTERVAL_MS = 10 * 60 * 1000;

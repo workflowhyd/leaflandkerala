@@ -1,12 +1,13 @@
 "use client";
 import { useEffect, useState, useCallback } from "react";
-import { Package, IndianRupee, Clock, Truck, CheckCircle, Circle } from "lucide-react";
+import { Package, IndianRupee, Clock, Truck, CheckCircle, Circle, TrendingUp } from "lucide-react";
 
 interface HomeData {
   name: string;
   weekOrders: number;
   pendingOrders: number;
   estimatedCommission: number;
+  totalEarnings: number;
   commissionPercent: number;
   daysUntilDelivery: number;
   weekDays: { label: string; date: string; done: boolean; isToday: boolean }[];
@@ -200,12 +201,26 @@ export default function EmployeeHome() {
 
   return (
     <div className="bg-gray-50 min-h-screen">
-      {/* Header */}
+      {/* Header with Total Earnings */}
       <div className="bg-green-600 px-4 pt-12 pb-6">
         <p className="text-green-100 text-sm">{dateStr}</p>
         <h1 className="text-white text-2xl font-bold mt-1">
           {greeting}, {data?.name?.split(" ")[0] ?? ""}!
         </h1>
+        <div className="mt-4 bg-green-700/60 rounded-2xl px-4 py-3 flex items-center justify-between">
+          <div>
+            <p className="text-green-200 text-xs font-medium flex items-center gap-1">
+              <TrendingUp size={13} /> Total Earnings
+            </p>
+            <p className="text-white text-3xl font-bold mt-0.5">
+              ₹{Math.round(data?.totalEarnings ?? 0).toLocaleString("en-IN")}
+            </p>
+            <p className="text-green-300 text-xs mt-0.5">{data?.commissionPercent}% commission rate</p>
+          </div>
+          <div className="w-14 h-14 rounded-full bg-white/10 flex items-center justify-center">
+            <IndianRupee size={28} className="text-white" />
+          </div>
+        </div>
       </div>
 
       {/* Offers Banner */}

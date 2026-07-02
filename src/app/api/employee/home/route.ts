@@ -28,7 +28,7 @@ export async function GET() {
 
   const { weekStart, weekEnd } = getWeekRange();
 
-  const [weekOrders, pendingOrders, commission] = await Promise.all([
+  const [weekOrders, pendingOrders, commission, totalCommission] = await Promise.all([
     prisma.order.count({
       where: {
         employeeId: employee.id,
@@ -48,6 +48,10 @@ export async function GET() {
         employeeId: employee.id,
         createdAt: { gte: weekStart, lte: weekEnd },
       },
+      _sum: { amount: true },
+    }),
+    prisma.commission.aggregate({
+      where: { employeeId: employee.id },
       _sum: { amount: true },
     }),
   ]);
@@ -78,6 +82,7 @@ export async function GET() {
     weekOrders,
     pendingOrders,
     estimatedCommission: commission._sum.amount ?? 0,
+    totalEarnings: totalCommission._sum.amount ?? 0,
     commissionPercent: employee.commissionPercent,
     daysUntilDelivery,
     weekDays,
