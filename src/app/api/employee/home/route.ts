@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getWeeklyCommission } from "@/lib/commission";
 
 function getWeekRange() {
   const now = new Date();
-  const day = now.getDay(); // 0=Sun
+  const day = now.getDay();
   const diffToMon = day === 0 ? -6 : 1 - day;
   const mon = new Date(now);
   mon.setDate(now.getDate() + diffToMon);
@@ -21,14 +22,12 @@ export async function GET() {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const employee = await prisma.employee.findUnique({
-    where: { userId: session.userId },
-  });
+  const employee = await prisma.employee.findUnique({ where: { userId: session.userId } });
   if (!employee) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   const { weekStart, weekEnd } = getWeekRange();
 
-  const [weekOrders, pendingOrders, commission, totalCommission] = await Promise.all([
+  const [weekOrders, pendingOrders, totalCommission, weeklyInfo] = await Promise.all([
     prisma.order.count({
       where: {
         employeeId: employee.id,
@@ -44,16 +43,10 @@ export async function GET() {
       },
     }),
     prisma.commission.aggregate({
-      where: {
-        employeeId: employee.id,
-        createdAt: { gte: weekStart, lte: weekEnd },
-      },
-      _sum: { amount: true },
-    }),
-    prisma.commission.aggregate({
       where: { employeeId: employee.id },
       _sum: { amount: true },
     }),
+    getWeeklyCommission(employee.id, weekStart, weekEnd),
   ]);
 
   const today = new Date();
@@ -69,7 +62,6 @@ export async function GET() {
     };
   });
 
-  // Next Sunday (delivery day)
   const nextSunday = new Date(weekStart);
   nextSunday.setDate(weekStart.getDate() + 6);
   const daysUntilDelivery = Math.max(
@@ -81,10 +73,19 @@ export async function GET() {
     name: session.name,
     weekOrders,
     pendingOrders,
-    estimatedCommission: commission._sum.amount ?? 0,
+    // Legacy field kept for compatibility
+    estimatedCommission: weeklyInfo.weeklyCommission,
     totalEarnings: totalCommission._sum.amount ?? 0,
     commissionPercent: employee.commissionPercent,
     daysUntilDelivery,
     weekDays,
+    // New weekly performance fields
+    weeklySales: weeklyInfo.weeklySales,
+    weeklyOrdersDelivered: weeklyInfo.weeklyOrdersDelivered,
+    weeklyCommission: weeklyInfo.weeklyCommission,
+    weeklyCommissionRate: weeklyInfo.commissionRate,
+    isEligibleForBonus: weeklyInfo.isEligible,
+    bonusThreshold: weeklyInfo.threshold,
+    bonusRate: weeklyInfo.bonusRate,
   });
 }

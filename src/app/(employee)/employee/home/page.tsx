@@ -1,6 +1,9 @@
 "use client";
 import { useEffect, useState, useCallback } from "react";
-import { Package, IndianRupee, Clock, Truck, CheckCircle, Circle, TrendingUp } from "lucide-react";
+import {
+  Package, IndianRupee, Clock, Truck, CheckCircle, Circle,
+  TrendingUp, ShoppingBag, Star, Zap,
+} from "lucide-react";
 
 interface HomeData {
   name: string;
@@ -11,6 +14,14 @@ interface HomeData {
   commissionPercent: number;
   daysUntilDelivery: number;
   weekDays: { label: string; date: string; done: boolean; isToday: boolean }[];
+  // Weekly performance (delivered orders only)
+  weeklySales: number;
+  weeklyOrdersDelivered: number;
+  weeklyCommission: number;
+  weeklyCommissionRate: number;
+  isEligibleForBonus: boolean;
+  bonusThreshold: number;
+  bonusRate: number;
 }
 
 interface OfferItem {
@@ -21,10 +32,7 @@ interface OfferItem {
   bannerImage: string | null;
 }
 
-interface NewReward {
-  id: string;
-  offerId: string;
-}
+interface NewReward { id: string; offerId: string }
 
 interface OffersData {
   offers: OfferItem[];
@@ -34,12 +42,8 @@ interface OffersData {
 }
 
 const OFFER_EMOJI: Record<string, string> = {
-  SIX_MONTHS_BONUS: "🏆",
-  BEST_PERFORMER: "🥇",
-  MONTHLY_INCENTIVE: "💰",
-  FESTIVAL_BONUS: "🎉",
-  REFERRAL_BONUS: "🤝",
-  CUSTOM: "🎁",
+  SIX_MONTHS_BONUS: "🏆", BEST_PERFORMER: "🥇", MONTHLY_INCENTIVE: "💰",
+  FESTIVAL_BONUS: "🎉", REFERRAL_BONUS: "🤝", CUSTOM: "🎁",
 };
 
 function getBadge(months: number): { label: string; className: string } {
@@ -49,11 +53,7 @@ function getBadge(months: number): { label: string; className: string } {
 }
 
 function OffersBanner({
-  offers,
-  newRewards,
-  monthsOfService,
-  onDismiss,
-  onMarkNotified,
+  offers, newRewards, monthsOfService, onDismiss, onMarkNotified,
 }: {
   offers: OfferItem[];
   newRewards: NewReward[];
@@ -64,16 +64,12 @@ function OffersBanner({
   const [currentIndex, setCurrentIndex] = useState(0);
   const [notified, setNotified] = useState(false);
 
-  // Auto-rotate normal banners
   useEffect(() => {
     if (newRewards.length > 0 || offers.length <= 1) return;
-    const timer = setInterval(() => {
-      setCurrentIndex((i) => (i + 1) % offers.length);
-    }, 4000);
+    const timer = setInterval(() => setCurrentIndex((i) => (i + 1) % offers.length), 4000);
     return () => clearInterval(timer);
   }, [newRewards.length, offers.length]);
 
-  // Mark achievement as notified once on mount
   useEffect(() => {
     if (newRewards.length > 0 && !notified) {
       setNotified(true);
@@ -93,59 +89,35 @@ function OffersBanner({
               <p className="text-amber-800 text-xs mt-0.5">
                 You&apos;ve completed <span className="font-semibold">{monthsOfService} months</span> with the company!
               </p>
-              <p className="text-amber-700 text-xs mt-1">
-                🎁 Your Loyalty Bonus is unlocked — contact your admin.
-              </p>
-              <p className="mt-1.5 text-xs">
-                Badge: <span className={badge.className}>{badge.label}</span>
-              </p>
+              <p className="text-amber-700 text-xs mt-1">🎁 Your Loyalty Bonus is unlocked — contact your admin.</p>
+              <p className="mt-1.5 text-xs">Badge: <span className={badge.className}>{badge.label}</span></p>
             </div>
           </div>
-          <button
-            onClick={onDismiss}
-            className="flex-shrink-0 text-amber-400 hover:text-amber-600 text-lg leading-none"
-            aria-label="Dismiss"
-          >
-            ×
-          </button>
+          <button onClick={onDismiss} className="flex-shrink-0 text-amber-400 hover:text-amber-600 text-lg leading-none" aria-label="Dismiss">×</button>
         </div>
       </div>
     );
   }
 
   if (offers.length === 0) return null;
-
   const offer = offers[currentIndex];
 
   return (
     <div className="mx-4 mt-4 rounded-xl bg-white border border-gray-100 shadow-sm p-4">
       <div className="flex items-center gap-3">
-        <span className="text-2xl leading-none flex-shrink-0">
-          {OFFER_EMOJI[offer.offerType] ?? "🎁"}
-        </span>
+        <span className="text-2xl leading-none flex-shrink-0">{OFFER_EMOJI[offer.offerType] ?? "🎁"}</span>
         <div className="min-w-0 flex-1">
           <p className="font-semibold text-gray-800 text-sm leading-tight">{offer.title}</p>
           <p className="text-xs text-gray-500 mt-0.5 truncate">
             {offer.description.length > 60 ? offer.description.slice(0, 60) + "…" : offer.description}
           </p>
         </div>
-        <button
-          onClick={onDismiss}
-          className="flex-shrink-0 text-gray-300 hover:text-gray-500 text-lg leading-none"
-          aria-label="Dismiss"
-        >
-          ×
-        </button>
+        <button onClick={onDismiss} className="flex-shrink-0 text-gray-300 hover:text-gray-500 text-lg leading-none" aria-label="Dismiss">×</button>
       </div>
       {offers.length > 1 && (
         <div className="flex justify-center gap-1.5 mt-3">
           {offers.map((_, i) => (
-            <button
-              key={i}
-              onClick={() => setCurrentIndex(i)}
-              className={`w-1.5 h-1.5 rounded-full transition-colors ${i === currentIndex ? "bg-green-500" : "bg-gray-200"}`}
-              aria-label={`Offer ${i + 1}`}
-            />
+            <button key={i} onClick={() => setCurrentIndex(i)} className={`w-1.5 h-1.5 rounded-full transition-colors ${i === currentIndex ? "bg-green-500" : "bg-gray-200"}`} />
           ))}
         </div>
       )}
@@ -172,18 +144,14 @@ export default function EmployeeHome() {
   const handleMarkNotified = useCallback(async (ids: string[]) => {
     for (const rewardId of ids) {
       await fetch("/api/employee/rewards", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+        method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ rewardId }),
       }).catch(() => null);
     }
   }, []);
 
   const today = new Date();
-  const dateStr = today.toLocaleDateString("en-IN", {
-    weekday: "long", day: "numeric", month: "long",
-  });
-
+  const dateStr = today.toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long" });
   const hour = today.getHours();
   const greeting = hour < 12 ? "Good Morning" : hour < 17 ? "Good Afternoon" : "Good Evening";
 
@@ -195,13 +163,15 @@ export default function EmployeeHome() {
     );
   }
 
-  const showBanner = !bannerDismissed && offersData && (
-    offersData.newRewards.length > 0 || offersData.offers.length > 0
-  );
+  const showBanner = !bannerDismissed && offersData && (offersData.newRewards.length > 0 || offersData.offers.length > 0);
+  const isEligible = data?.isEligibleForBonus ?? false;
+  const salesProgress = data && data.bonusThreshold > 0
+    ? Math.min((data.weeklySales / data.bonusThreshold) * 100, 100)
+    : 0;
 
   return (
     <div className="bg-gray-50 min-h-screen">
-      {/* Header with Total Earnings */}
+      {/* Header */}
       <div className="bg-green-600 px-4 pt-12 pb-6">
         <p className="text-green-100 text-sm">{dateStr}</p>
         <h1 className="text-white text-2xl font-bold mt-1">
@@ -215,7 +185,7 @@ export default function EmployeeHome() {
             <p className="text-white text-3xl font-bold mt-0.5">
               ₹{Math.round(data?.totalEarnings ?? 0).toLocaleString("en-IN")}
             </p>
-            <p className="text-green-300 text-xs mt-0.5">{data?.commissionPercent}% commission rate</p>
+            <p className="text-green-300 text-xs mt-0.5">{data?.commissionPercent}% base rate</p>
           </div>
           <div className="w-14 h-14 rounded-full bg-white/10 flex items-center justify-center">
             <IndianRupee size={28} className="text-white" />
@@ -234,9 +204,60 @@ export default function EmployeeHome() {
         />
       )}
 
+      {/* Commission bonus eligibility banner */}
+      {data && (
+        <div className={`mx-4 mt-4 rounded-xl border p-4 shadow-sm ${isEligible ? "bg-amber-50 border-amber-200" : "bg-white border-gray-100"}`}>
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              {isEligible ? <Star size={16} className="text-amber-500" /> : <Zap size={16} className="text-gray-400" />}
+              <p className={`text-sm font-semibold ${isEligible ? "text-amber-800" : "text-gray-700"}`}>
+                {isEligible ? `${data.bonusRate}% Commission Unlocked!` : "Weekly Commission Goal"}
+              </p>
+            </div>
+            <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${isEligible ? "bg-amber-200 text-amber-800" : "bg-gray-100 text-gray-500"}`}>
+              {isEligible ? "ELIGIBLE" : `${Math.round(salesProgress)}%`}
+            </span>
+          </div>
+          <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all ${isEligible ? "bg-amber-400" : "bg-green-500"}`}
+              style={{ width: `${salesProgress}%` }}
+            />
+          </div>
+          <div className="flex justify-between mt-1.5 text-xs text-gray-400">
+            <span>₹{Math.round(data.weeklySales).toLocaleString("en-IN")} delivered</span>
+            <span>Target: ₹{Math.round(data.bonusThreshold).toLocaleString("en-IN")}</span>
+          </div>
+        </div>
+      )}
+
       <div className="px-4 py-4 space-y-4">
-        {/* Summary Cards */}
+        {/* Weekly Performance Cards */}
         <div className="grid grid-cols-2 gap-3">
+          <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+            <div className="flex items-center gap-2 mb-2">
+              <ShoppingBag size={18} className="text-blue-500" />
+              <span className="text-xs text-gray-500 font-medium">Weekly Sales</span>
+            </div>
+            <p className="text-2xl font-bold text-gray-800">
+              ₹{Math.round(data?.weeklySales ?? 0).toLocaleString("en-IN")}
+            </p>
+            <p className="text-xs text-gray-400 mt-1">{data?.weeklyOrdersDelivered ?? 0} delivered</p>
+          </div>
+
+          <div className={`rounded-xl p-4 shadow-sm border ${isEligible ? "bg-amber-50 border-amber-200" : "bg-white border-gray-100"}`}>
+            <div className="flex items-center gap-2 mb-2">
+              <IndianRupee size={18} className={isEligible ? "text-amber-500" : "text-green-600"} />
+              <span className="text-xs text-gray-500 font-medium">Commission</span>
+            </div>
+            <p className={`text-2xl font-bold ${isEligible ? "text-amber-700" : "text-gray-800"}`}>
+              ₹{Math.round(data?.weeklyCommission ?? 0).toLocaleString("en-IN")}
+            </p>
+            <p className={`text-xs mt-1 ${isEligible ? "text-amber-600 font-semibold" : "text-gray-400"}`}>
+              {data?.weeklyCommissionRate ?? 0}% rate{isEligible ? " ⭐" : ""}
+            </p>
+          </div>
+
           <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
             <div className="flex items-center gap-2 mb-2">
               <Package size={18} className="text-green-600" />
@@ -247,43 +268,27 @@ export default function EmployeeHome() {
 
           <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
             <div className="flex items-center gap-2 mb-2">
-              <IndianRupee size={18} className="text-green-600" />
-              <span className="text-xs text-gray-500 font-medium">Est. Commission</span>
-            </div>
-            <p className="text-3xl font-bold text-gray-800">
-              ₹{Math.round(data?.estimatedCommission ?? 0).toLocaleString("en-IN")}
-            </p>
-            <p className="text-xs text-gray-400 mt-1">{data?.commissionPercent}% rate</p>
-          </div>
-
-          <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
-            <div className="flex items-center gap-2 mb-2">
               <Clock size={18} className="text-orange-500" />
-              <span className="text-xs text-gray-500 font-medium">Pending</span>
+              <span className="text-xs text-gray-500 font-medium">Pending Delivery</span>
             </div>
             <p className="text-3xl font-bold text-gray-800">{data?.pendingOrders ?? 0}</p>
-            <p className="text-xs text-gray-400 mt-1">awaiting delivery</p>
-          </div>
-
-          <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
-            <div className="flex items-center gap-2 mb-2">
-              <Truck size={18} className="text-blue-500" />
-              <span className="text-xs text-gray-500 font-medium">Delivery In</span>
-            </div>
-            <p className="text-3xl font-bold text-gray-800">{data?.daysUntilDelivery ?? 0}</p>
-            <p className="text-xs text-gray-400 mt-1">days</p>
+            <p className="text-xs text-gray-400 mt-1">in {data?.daysUntilDelivery ?? 0} days</p>
           </div>
         </div>
 
         {/* Week Progress */}
         <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
-          <h2 className="text-sm font-semibold text-gray-700 mb-3">Week Progress</h2>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-sm font-semibold text-gray-700">Week Progress</h2>
+            <div className="flex items-center gap-1 text-xs text-blue-500">
+              <Truck size={13} />
+              <span>Delivery Sunday</span>
+            </div>
+          </div>
           <div className="flex items-center justify-between">
             {data?.weekDays.map((day) => (
               <div key={day.date} className="flex flex-col items-center gap-1">
-                <span className={`text-xs font-medium ${day.isToday ? "text-green-600" : "text-gray-400"}`}>
-                  {day.label}
-                </span>
+                <span className={`text-xs font-medium ${day.isToday ? "text-green-600" : "text-gray-400"}`}>{day.label}</span>
                 {day.done ? (
                   <CheckCircle size={22} className="text-green-500" />
                 ) : day.isToday ? (
@@ -303,11 +308,7 @@ export default function EmployeeHome() {
           <div className="mt-3 h-1.5 bg-gray-100 rounded-full overflow-hidden">
             <div
               className="h-full bg-green-500 rounded-full transition-all"
-              style={{
-                width: `${Math.round(
-                  ((data?.weekDays.filter((d) => d.done).length ?? 0) / 6) * 100
-                )}%`,
-              }}
+              style={{ width: `${Math.round(((data?.weekDays.filter((d) => d.done).length ?? 0) / 6) * 100)}%` }}
             />
           </div>
         </div>

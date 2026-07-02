@@ -60,14 +60,8 @@ export default function LoginPage() {
 
         {/* Logo */}
         <div className="relative z-10">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: "#3B7A57" }}>
-              <LeafIcon />
-            </div>
-            <span className="text-xl font-semibold tracking-tight" style={{ color: "#F8F5EE" }}>
-              LeafLand Kerala
-            </span>
-          </div>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo.svg" alt="Leaf Land Kerala" className="h-16 w-auto brightness-0 invert" />
         </div>
 
         {/* Hero illustration */}
@@ -104,13 +98,9 @@ export default function LoginPage() {
       >
         <div className="w-full max-w-sm">
           {/* Mobile logo */}
-          <div className="flex items-center gap-3 mb-10 lg:hidden">
-            <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ backgroundColor: "#1E4D3D" }}>
-              <LeafIcon light />
-            </div>
-            <span className="text-lg font-semibold" style={{ color: "#1E4D3D" }}>
-              LeafLand Kerala
-            </span>
+          <div className="flex justify-center mb-10 lg:hidden">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logo.svg" alt="Leaf Land Kerala" className="h-20 w-auto" />
           </div>
 
           <div className="mb-8">

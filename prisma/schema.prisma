@@ -334,11 +334,16 @@ model DeliverySchedule {
 }
 
 model CommissionSetting {
-  id                String   @id @default(cuid())
-  defaultPercentage Float    @default(10.0)
-  minPercentage     Float    @default(5.0)
-  maxPercentage     Float    @default(15.0)
-  updatedAt         DateTime @updatedAt
+  id                    String   @id @default(cuid())
+  defaultPercentage     Float    @default(10.0)
+  minPercentage         Float    @default(5.0)
+  maxPercentage         Float    @default(15.0)
+  weeklyBonusThreshold  Float    @default(50000)
+  weeklyBonusRate       Float    @default(35)
+  freeGiftEnabled       Boolean  @default(false)
+  freeGiftProductName   String   @default("Free Gift")
+  freeGiftMinAmount     Float    @default(3000)
+  updatedAt             DateTime @updatedAt
 }
 
 model Commission {

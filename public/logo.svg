@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 320" fill="none">
+  <!-- Leaf shape -->
+  <path d="M60 200 C30 170 20 120 50 80 C80 40 140 30 170 60 C140 90 110 130 100 180 Z" fill="#2D6A3F"/>
+  <!-- Person body -->
+  <circle cx="175" cy="65" r="22" fill="#2D6A3F"/>
+  <!-- Left arm raised -->
+  <path d="M153 85 C130 60 120 45 108 38" stroke="#2D6A3F" stroke-width="14" stroke-linecap="round"/>
+  <!-- Right arm raised -->
+  <path d="M197 85 C215 62 225 48 238 40" stroke="#2D6A3F" stroke-width="14" stroke-linecap="round"/>
+  <!-- Body/legs -->
+  <path d="M155 105 C155 140 160 165 155 190" stroke="#2D6A3F" stroke-width="13" stroke-linecap="round"/>
+  <path d="M195 105 C195 140 190 165 195 190" stroke="#2D6A3F" stroke-width="13" stroke-linecap="round"/>
+  <path d="M155 105 L195 105" stroke="#2D6A3F" stroke-width="13" stroke-linecap="round"/>
+  <!-- Text: Leaf Land -->
+  <text x="30" y="250" font-family="Georgia, serif" font-size="52" fill="#2D6A3F" font-weight="400">Leaf Land</text>
+  <!-- Text: KERALA -->
+  <text x="80" y="295" font-family="Arial, sans-serif" font-size="26" fill="#2D6A3F" font-weight="700" letter-spacing="8">KERALA</text>
+</svg>

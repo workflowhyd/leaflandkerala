@@ -11,7 +11,6 @@ import {
   UserCheck,
   BarChart3,
   Settings,
-  Leaf,
   LogOut,
   ChevronRight,
   X,
@@ -80,14 +79,10 @@ export function Sidebar({ userRole, userName, onLogout, onClose, isMobile, notif
 
   return (
     <aside className="flex h-full w-60 flex-col bg-[#1E4D3D] text-[#F8F5EE]">
-      <div className="flex h-16 items-center gap-3 border-b border-[#F8F5EE]/10 px-5">
-        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#F8F5EE]/15 flex-shrink-0">
-          <Leaf className="h-5 w-5 text-[#F8F5EE]" />
-        </div>
+      <div className="flex h-16 items-center gap-3 border-b border-[#F8F5EE]/10 px-4">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/logo.svg" alt="Leaf Land Kerala" className="h-9 w-auto brightness-0 invert flex-shrink-0" />
         <div className="flex flex-col leading-tight flex-1 min-w-0">
-          <span className="text-sm font-bold tracking-tight text-[#F8F5EE]">
-            LeafLand Kerala
-          </span>
           <span className="text-[10px] text-[#F8F5EE]/60 uppercase tracking-wider">
             Agriculture ERP
           </span>

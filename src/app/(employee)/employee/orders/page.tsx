@@ -149,6 +149,7 @@ function OrdersPageContent() {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
   const [placedOrder, setPlacedOrder] = useState<PlacedOrder | null>(null);
+  const [freeGift, setFreeGift] = useState<{ enabled: boolean; productName: string; minAmount: number } | null>(null);
 
   const productTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const customerTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -159,6 +160,10 @@ function OrdersPageContent() {
     window.addEventListener("online", handler);
     if (navigator.onLine) flushQueue();
     return () => window.removeEventListener("online", handler);
+  }, []);
+
+  useEffect(() => {
+    fetch("/api/employee/free-gift").then((r) => r.ok ? r.json() : null).then((d) => { if (d) setFreeGift(d); }).catch(() => {});
   }, []);
 
   const loadOrders = useCallback(async () => {
@@ -258,13 +263,18 @@ function OrdersPageContent() {
     setSubmitting(true);
     setSubmitError("");
 
+    const freeGiftEligible = freeGift?.enabled && total >= (freeGift?.minAmount ?? 0);
+    const freeGiftNote = freeGiftEligible ? `[Free Gift: ${freeGift!.productName}]` : "";
+    const fullNotes = [notes, freeGiftNote].filter(Boolean).join(" | ");
+
     const payload = {
       customerId: selectedCustomer.id,
       items: cartItems.map((i) => ({ productId: i.productId, quantity: i.quantity, price: i.price })),
-      notes,
+      notes: fullNotes || undefined,
       latitude: gps?.lat,
       longitude: gps?.lng,
       accuracy: gps?.accuracy,
+      freeGift: freeGiftEligible ? { name: freeGift!.productName } : undefined,
     };
 
     try {
@@ -422,6 +432,25 @@ function OrdersPageContent() {
 
       {cartItems.length > 0 && (
         <div className="px-4 pb-4 space-y-2">
+          {/* Free gift banner */}
+          {freeGift?.enabled && total >= freeGift.minAmount && (
+            <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-3 flex items-center gap-3">
+              <span className="text-2xl leading-none">🎁</span>
+              <div>
+                <p className="text-sm font-semibold text-green-800">Free Gift Unlocked!</p>
+                <p className="text-xs text-green-600">{freeGift.productName} added to your order at no cost.</p>
+              </div>
+            </div>
+          )}
+          {/* Nudge: how much more to unlock free gift */}
+          {freeGift?.enabled && total < freeGift.minAmount && (
+            <div className="bg-amber-50 border border-amber-100 rounded-xl px-4 py-3 flex items-center gap-3">
+              <span className="text-xl leading-none">🎁</span>
+              <p className="text-xs text-amber-700">
+                Add ₹{(freeGift.minAmount - total).toLocaleString("en-IN")} more to get a free <span className="font-semibold">{freeGift.productName}</span>!
+              </p>
+            </div>
+          )}
           <div className="bg-white rounded-xl px-4 py-3 flex items-center justify-between shadow-sm border border-gray-100">
             <span className="text-gray-600 font-medium">Total</span>
             <span className="text-green-700 font-bold text-lg">₹{total.toLocaleString("en-IN")}</span>
@@ -564,6 +593,12 @@ function OrdersPageContent() {
               <span className="font-medium">₹{(i.price * i.quantity).toLocaleString("en-IN")}</span>
             </div>
           ))}
+          {freeGift?.enabled && total >= freeGift.minAmount && (
+            <div className="flex justify-between text-sm py-1 text-green-600">
+              <span className="flex items-center gap-1">🎁 {freeGift.productName} <span className="text-xs text-green-500">(Free)</span></span>
+              <span className="font-medium">₹0</span>
+            </div>
+          )}
           <div className="border-t border-gray-100 mt-2 pt-2 flex justify-between font-bold text-gray-800">
             <span>Total</span>
             <span className="text-green-700">₹{total.toLocaleString("en-IN")}</span>

@@ -46,6 +46,11 @@ interface CommissionSetting {
   defaultPercentage: number;
   minPercentage: number;
   maxPercentage: number;
+  weeklyBonusThreshold: number;
+  weeklyBonusRate: number;
+  freeGiftEnabled: boolean;
+  freeGiftProductName: string;
+  freeGiftMinAmount: number;
 }
 
 interface Pincode {
@@ -147,7 +152,11 @@ export default function SettingsPage() {
 
   const [company, setCompany] = useState<CompanyInfo>({ businessName: "LeafLand Kerala", contactNumber: "", email: "", gstNumber: "", address: "", logoUrl: "" });
   const [whatsapp, setWhatsapp] = useState<WhatsAppSetting>({ isEnabled: false, apiKey: "", phoneNumberId: "", adminPhone: "", templateOrderPlaced: "", templateConfirmed: "", templateProcessing: "", templateDispatched: "", templateDelivery: "", templateDelivered: "", templateReminder: "" });
-  const [commission, setCommission] = useState<CommissionSetting>({ defaultPercentage: 10, minPercentage: 5, maxPercentage: 15 });
+  const [commission, setCommission] = useState<CommissionSetting>({
+    defaultPercentage: 10, minPercentage: 5, maxPercentage: 15,
+    weeklyBonusThreshold: 50000, weeklyBonusRate: 35,
+    freeGiftEnabled: false, freeGiftProductName: "Free Gift", freeGiftMinAmount: 3000,
+  });
   const [pincodes, setPincodes] = useState<Pincode[]>([]);
   const [newPincode, setNewPincode] = useState({ code: "", area: "", district: "" });
   const [pincodeLoading, setPincodeLoading] = useState(false);
@@ -178,7 +187,16 @@ export default function SettingsPage() {
     fetch("/api/settings").then((r) => r.json()).then((data) => {
       if (data.company) setCompany({ businessName: data.company.businessName || "", contactNumber: data.company.contactNumber || "", email: data.company.email || "", gstNumber: data.company.gstNumber || "", address: data.company.address || "", logoUrl: data.company.logoUrl || "" });
       if (data.whatsapp) setWhatsapp({ isEnabled: data.whatsapp.isEnabled, apiKey: data.whatsapp.apiKey || "", phoneNumberId: data.whatsapp.phoneNumberId || "", adminPhone: data.whatsapp.adminPhone || "", templateOrderPlaced: data.whatsapp.templateOrderPlaced || "", templateConfirmed: data.whatsapp.templateConfirmed || "", templateProcessing: data.whatsapp.templateProcessing || "", templateDispatched: data.whatsapp.templateDispatched || "", templateDelivery: data.whatsapp.templateDelivery || "", templateDelivered: data.whatsapp.templateDelivered || "", templateReminder: data.whatsapp.templateReminder || "" });
-      if (data.commission) setCommission({ defaultPercentage: data.commission.defaultPercentage, minPercentage: data.commission.minPercentage, maxPercentage: data.commission.maxPercentage });
+      if (data.commission) setCommission({
+        defaultPercentage: data.commission.defaultPercentage,
+        minPercentage: data.commission.minPercentage,
+        maxPercentage: data.commission.maxPercentage,
+        weeklyBonusThreshold: data.commission.weeklyBonusThreshold ?? 50000,
+        weeklyBonusRate: data.commission.weeklyBonusRate ?? 35,
+        freeGiftEnabled: data.commission.freeGiftEnabled ?? false,
+        freeGiftProductName: data.commission.freeGiftProductName ?? "Free Gift",
+        freeGiftMinAmount: data.commission.freeGiftMinAmount ?? 3000,
+      });
     });
     fetchPincodes();
     fetchOffers();
@@ -484,11 +502,94 @@ export default function SettingsPage() {
                 </div>
               </div>
               <div className="rounded-md bg-[#1E4D3D]/5 px-4 py-3 text-sm text-[#1E4D3D]">
-                Employees will earn {commission.defaultPercentage}% commission by default (range: {commission.minPercentage}%–{commission.maxPercentage}%).
+                Employees earn {commission.defaultPercentage}% base commission (range: {commission.minPercentage}%–{commission.maxPercentage}%).
+              </div>
+
+              {/* Weekly Performance Bonus */}
+              <div className="border-t border-[#e2e8f0] pt-5">
+                <p className="text-sm font-semibold text-[#1a1a1a] mb-1">Weekly Performance Commission</p>
+                <p className="text-xs text-[#64748b] mb-4">When an employee&apos;s weekly delivered sales exceed the threshold, a higher commission rate applies automatically.</p>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-sm font-medium text-[#1a1a1a]">Sales Threshold (₹)</label>
+                    <input
+                      type="number"
+                      min={0}
+                      step={1000}
+                      value={commission.weeklyBonusThreshold}
+                      onChange={(e) => setCommission((p) => ({ ...p, weeklyBonusThreshold: parseFloat(e.target.value) || 0 }))}
+                      className="w-full rounded-md border border-[#e2e8f0] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3B7A57]"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-sm font-medium text-[#1a1a1a]">Bonus Commission Rate (%)</label>
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      step={0.5}
+                      value={commission.weeklyBonusRate}
+                      onChange={(e) => setCommission((p) => ({ ...p, weeklyBonusRate: parseFloat(e.target.value) || 0 }))}
+                      className="w-full rounded-md border border-[#e2e8f0] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3B7A57]"
+                    />
+                  </div>
+                </div>
+                <div className="mt-3 rounded-md bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">
+                  Employees who deliver ₹{commission.weeklyBonusThreshold.toLocaleString("en-IN")}+ in a week earn {commission.weeklyBonusRate}% commission on those sales.
+                </div>
+              </div>
+
+              {/* Free Gift */}
+              <div className="border-t border-[#e2e8f0] pt-5">
+                <div className="flex items-center justify-between mb-3">
+                  <div>
+                    <p className="text-sm font-semibold text-[#1a1a1a]">Customer Free Gift</p>
+                    <p className="text-xs text-[#64748b]">Automatically offer a free item when the cart total meets the minimum.</p>
+                  </div>
+                  <button type="button" onClick={() => setCommission((p) => ({ ...p, freeGiftEnabled: !p.freeGiftEnabled }))} className="text-[#1E4D3D] flex-shrink-0 ml-4">
+                    {commission.freeGiftEnabled
+                      ? <ToggleRight className="h-8 w-8" />
+                      : <ToggleLeft className="h-8 w-8 text-[#64748b]" />}
+                  </button>
+                </div>
+                {commission.freeGiftEnabled && (
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-sm font-medium text-[#1a1a1a]">Minimum Order Amount (₹)</label>
+                      <input
+                        type="number"
+                        min={0}
+                        step={100}
+                        value={commission.freeGiftMinAmount}
+                        onChange={(e) => setCommission((p) => ({ ...p, freeGiftMinAmount: parseFloat(e.target.value) || 0 }))}
+                        className="w-full rounded-md border border-[#e2e8f0] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3B7A57]"
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-sm font-medium text-[#1a1a1a]">Free Gift Item Name</label>
+                      <input
+                        type="text"
+                        value={commission.freeGiftProductName}
+                        onChange={(e) => setCommission((p) => ({ ...p, freeGiftProductName: e.target.value }))}
+                        placeholder="e.g. Organic Tea Sample"
+                        className="w-full rounded-md border border-[#e2e8f0] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3B7A57]"
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
             <div className="mt-6 flex justify-end">
-              <Button loading={saving} onClick={() => saveSettings("commission", { defaultPercentage: commission.defaultPercentage, minPercentage: commission.minPercentage, maxPercentage: commission.maxPercentage })}>
+              <Button loading={saving} onClick={() => saveSettings("commission", {
+                defaultPercentage: commission.defaultPercentage,
+                minPercentage: commission.minPercentage,
+                maxPercentage: commission.maxPercentage,
+                weeklyBonusThreshold: commission.weeklyBonusThreshold,
+                weeklyBonusRate: commission.weeklyBonusRate,
+                freeGiftEnabled: commission.freeGiftEnabled,
+                freeGiftProductName: commission.freeGiftProductName,
+                freeGiftMinAmount: commission.freeGiftMinAmount,
+              })}>
                 Save Commission Settings
               </Button>
             </div>
