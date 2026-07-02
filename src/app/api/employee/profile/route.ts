@@ -11,10 +11,13 @@ export async function GET() {
   const employee = await prisma.employee.findUnique({
     where: { userId: session.userId },
     select: {
+      id: true,
       territory: true,
       commissionPercent: true,
       mobile: true,
       address: true,
+      isActive: true,
+      createdAt: true,
     },
   });
 

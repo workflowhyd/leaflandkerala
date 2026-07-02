@@ -27,23 +27,53 @@ export async function GET() {
   const weeks = await Promise.all(
     [0, 1, 2, 3].map(async (weeksAgo) => {
       const { start, end } = getWeekBounds(weeksAgo);
-      const [commissions, orderCount] = await Promise.all([
-        prisma.commission.aggregate({
-          where: { employeeId: employee.id, createdAt: { gte: start, lte: end } },
-          _sum: { amount: true },
-        }),
-        prisma.order.count({
-          where: { employeeId: employee.id, createdAt: { gte: start, lte: end }, status: { not: "CANCELLED" } },
-        }),
-      ]);
-      const label = weeksAgo === 0 ? "This Week" :
-                    weeksAgo === 1 ? "Last Week" :
-                    `${start.toLocaleDateString("en-IN", { day: "numeric", month: "short" })} – ${end.toLocaleDateString("en-IN", { day: "numeric", month: "short" })}`;
+
+      // Only count DELIVERED orders for stats
+      const deliveredOrders = await prisma.order.findMany({
+        where: {
+          employeeId: employee.id,
+          status: "DELIVERED",
+          updatedAt: { gte: start, lte: end },
+        },
+        select: {
+          id: true,
+          totalAmount: true,
+          items: { select: { quantity: true } },
+        },
+      });
+
+      const ordersDelivered = deliveredOrders.length;
+      const salesAmount = deliveredOrders.reduce((s, o) => s + o.totalAmount, 0);
+      const productsDelivered = deliveredOrders.reduce(
+        (s, o) => s + o.items.reduce((si, i) => si + i.quantity, 0),
+        0
+      );
+
+      // Get commissions for those delivered orders
+      const commissions = deliveredOrders.length > 0
+        ? await prisma.commission.aggregate({
+            where: { employeeId: employee.id, orderId: { in: deliveredOrders.map((o) => o.id) } },
+            _sum: { amount: true },
+          })
+        : { _sum: { amount: 0 } };
+
+      const earnings = commissions._sum.amount ?? 0;
+
+      const label =
+        weeksAgo === 0
+          ? "This Week"
+          : weeksAgo === 1
+          ? "Last Week"
+          : `${start.toLocaleDateString("en-IN", { day: "numeric", month: "short" })} – ${end.toLocaleDateString("en-IN", { day: "numeric", month: "short" })}`;
+
       return {
         label,
         weekStart: start.toISOString(),
-        earnings: commissions._sum.amount ?? 0,
-        ordersCount: orderCount,
+        weekEnd: end.toISOString(),
+        ordersDelivered,
+        salesAmount,
+        productsDelivered,
+        earnings,
       };
     })
   );

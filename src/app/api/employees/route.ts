@@ -25,7 +25,11 @@ export async function GET(request: NextRequest) {
   const page = parseInt(searchParams.get("page") || "1");
   const limit = parseInt(searchParams.get("limit") || "20");
 
+  const status = searchParams.get("status") || "all"; // "active" | "inactive" | "all"
+
   const where: Record<string, unknown> = {};
+  if (status === "active") where.isActive = true;
+  if (status === "inactive") where.isActive = false;
   if (search) {
     where.OR = [
       { name: { contains: search, mode: "insensitive" } },

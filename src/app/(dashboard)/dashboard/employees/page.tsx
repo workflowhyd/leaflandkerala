@@ -9,6 +9,8 @@ import {
   Eye,
   Edit,
   UserX,
+  UserCheck2,
+  Trash2,
   ChevronLeft,
   ChevronRight,
   CheckCircle,
@@ -16,6 +18,7 @@ import {
   Phone,
   MapPin,
   Percent,
+  AlertTriangle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -29,6 +32,8 @@ import {
 } from "@/components/ui/table";
 import { AddEmployeeModal } from "@/components/employees/add-employee-modal";
 import { useToast } from "@/components/ui/toast";
+
+type StatusFilter = "all" | "active" | "inactive";
 
 interface Employee {
   id: string;
@@ -60,23 +65,27 @@ function ToggleConfirmModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onCancel} />
       <div className="relative z-10 w-full max-w-sm rounded-xl bg-white p-6 shadow-2xl">
-        <div className={`mb-4 flex h-12 w-12 items-center justify-center rounded-full ${employee.isActive ? "bg-[#D32F2F]/10" : "bg-[#2E7D32]/10"}`}>
-          <UserX className={`h-6 w-6 ${employee.isActive ? "text-[#D32F2F]" : "text-[#2E7D32]"}`} />
+        <div className={`mb-4 flex h-12 w-12 items-center justify-center rounded-full ${employee.isActive ? "bg-amber-100" : "bg-green-100"}`}>
+          {employee.isActive ? (
+            <UserX className="h-6 w-6 text-amber-600" />
+          ) : (
+            <UserCheck2 className="h-6 w-6 text-green-600" />
+          )}
         </div>
         <h3 className="mb-2 text-lg font-semibold text-[#1a1a1a]">{action} Employee</h3>
         <p className="mb-1 text-sm font-medium text-[#1a1a1a]">{employee.name}</p>
         <p className="mb-6 text-sm text-[#64748b]">
           {employee.isActive
-            ? "This employee will lose access to the system."
-            : "This employee will regain access to the system."}
+            ? "This employee will lose access to the system. You can re-enable them later."
+            : "This employee will regain full access to the system."}
         </p>
         <div className="flex gap-3">
           <Button variant="outline" className="flex-1" onClick={onCancel} disabled={loading}>
             Cancel
           </Button>
           <Button
-            variant={employee.isActive ? "danger" : "default"}
-            className="flex-1"
+            variant={employee.isActive ? "default" : "default"}
+            className={`flex-1 ${employee.isActive ? "bg-amber-600 hover:bg-amber-700 text-white" : ""}`}
             onClick={onConfirm}
             loading={loading}
           >
@@ -88,6 +97,55 @@ function ToggleConfirmModal({
   );
 }
 
+function DeleteConfirmModal({
+  open,
+  employee,
+  loading,
+  onConfirm,
+  onCancel,
+}: {
+  open: boolean;
+  employee: Employee | null;
+  loading: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  if (!open || !employee) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onCancel} />
+      <div className="relative z-10 w-full max-w-sm rounded-xl bg-white p-6 shadow-2xl">
+        <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-red-100">
+          <AlertTriangle className="h-6 w-6 text-red-600" />
+        </div>
+        <h3 className="mb-2 text-lg font-semibold text-[#1a1a1a]">Remove Employee</h3>
+        <p className="mb-1 text-sm font-medium text-[#1a1a1a]">{employee.name}</p>
+        <p className="mb-2 text-sm text-[#64748b]">
+          Are you sure you want to remove this employee? This action cannot be undone.
+        </p>
+        <p className="mb-6 text-xs text-[#94a3b8] bg-[#f8fafc] rounded-lg p-3 border border-[#e2e8f0]">
+          The employee&apos;s order history, earnings, and delivery records will be preserved for reporting purposes.
+          They will immediately lose access to the system.
+        </p>
+        <div className="flex gap-3">
+          <Button variant="outline" className="flex-1" onClick={onCancel} disabled={loading}>
+            Cancel
+          </Button>
+          <Button variant="danger" className="flex-1" onClick={onConfirm} loading={loading}>
+            Remove Employee
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const STATUS_TABS: { label: string; value: StatusFilter; color: string }[] = [
+  { label: "All",      value: "all",      color: "text-[#1a1a1a]" },
+  { label: "Active",   value: "active",   color: "text-green-700" },
+  { label: "Inactive", value: "inactive", color: "text-red-700"   },
+];
+
 export default function EmployeesPage() {
   const router = useRouter();
   const { success, error: toastError } = useToast();
@@ -96,15 +154,23 @@ export default function EmployeesPage() {
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [showAddModal, setShowAddModal] = useState(false);
   const [toggleEmployee, setToggleEmployee] = useState<Employee | null>(null);
+  const [deleteEmployee, setDeleteEmployee] = useState<Employee | null>(null);
   const [toggleLoading, setToggleLoading] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
   const limit = 20;
 
   const fetchEmployees = useCallback(async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams({ page: String(page), limit: String(limit), search });
+      const params = new URLSearchParams({
+        page: String(page),
+        limit: String(limit),
+        search,
+        status: statusFilter,
+      });
       const res = await fetch(`/api/employees?${params}`);
       if (res.ok) {
         const data = await res.json();
@@ -114,7 +180,7 @@ export default function EmployeesPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, search]);
+  }, [page, search, statusFilter]);
 
   useEffect(() => { fetchEmployees(); }, [fetchEmployees]);
 
@@ -144,7 +210,38 @@ export default function EmployeesPage() {
     }
   };
 
+  const handleDelete = async () => {
+    if (!deleteEmployee) return;
+    setDeleteLoading(true);
+    try {
+      const res = await fetch(`/api/employees/${deleteEmployee.id}`, { method: "DELETE" });
+      if (res.ok) {
+        success("Employee removed", `${deleteEmployee.name} has been removed from the system`);
+        setDeleteEmployee(null);
+        fetchEmployees();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        toastError(data.error || "Failed to remove employee");
+      }
+    } catch {
+      toastError("Failed to remove employee");
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
+
   const totalPages = Math.ceil(total / limit);
+
+  const StatusBadge = ({ isActive }: { isActive: boolean }) =>
+    isActive ? (
+      <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-700">
+        <CheckCircle className="h-3 w-3" />Active
+      </span>
+    ) : (
+      <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-700">
+        <XCircle className="h-3 w-3" />Inactive
+      </span>
+    );
 
   return (
     <div className="flex flex-col gap-4 lg:gap-6">
@@ -160,8 +257,8 @@ export default function EmployeesPage() {
         </Button>
       </div>
 
-      {/* Search */}
-      <Card className="p-3 lg:p-4">
+      {/* Search + Filters */}
+      <Card className="p-3 lg:p-4 space-y-3">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#64748b]" />
           <input
@@ -171,6 +268,21 @@ export default function EmployeesPage() {
             onChange={(e) => { setSearch(e.target.value); setPage(1); }}
             className="w-full rounded-md border border-[#e2e8f0] bg-white pl-10 pr-3 py-2 text-sm text-[#1a1a1a] placeholder:text-[#64748b] focus:outline-none focus:ring-2 focus:ring-[#3B7A57] focus:border-transparent hover:border-[#3B7A57] transition-colors"
           />
+        </div>
+        <div className="flex gap-2">
+          {STATUS_TABS.map((tab) => (
+            <button
+              key={tab.value}
+              onClick={() => { setStatusFilter(tab.value); setPage(1); }}
+              className={`px-4 py-1.5 rounded-full text-sm font-medium border transition-colors ${
+                statusFilter === tab.value
+                  ? "bg-[#1E4D3D] text-white border-[#1E4D3D]"
+                  : "bg-white text-[#64748b] border-[#e2e8f0] hover:border-[#3B7A57] hover:text-[#3B7A57]"
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
         </div>
       </Card>
 
@@ -184,7 +296,7 @@ export default function EmployeesPage() {
           <UserCheck className="h-12 w-12 text-[#64748b]/40 mb-3" />
           <p className="text-[#64748b] font-medium">No employees found</p>
           <p className="text-sm text-[#64748b]/70 mt-1">
-            {search ? "Try a different search" : "Add your first employee to get started"}
+            {search ? "Try a different search" : statusFilter !== "all" ? `No ${statusFilter} employees` : "Add your first employee to get started"}
           </p>
         </div>
       ) : (
@@ -207,17 +319,7 @@ export default function EmployeesPage() {
                         </div>
                       </div>
                     </div>
-                    {emp.isActive ? (
-                      <span className="flex-shrink-0 inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">
-                        <CheckCircle className="h-3 w-3" />
-                        Active
-                      </span>
-                    ) : (
-                      <span className="flex-shrink-0 inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">
-                        <XCircle className="h-3 w-3" />
-                        Disabled
-                      </span>
-                    )}
+                    <StatusBadge isActive={emp.isActive} />
                   </div>
 
                   <div className="grid grid-cols-2 gap-2 text-xs text-[#64748b]">
@@ -239,31 +341,38 @@ export default function EmployeesPage() {
                     </div>
                   </div>
                 </div>
-                <div className="flex items-center justify-end gap-2 border-t border-[#e2e8f0] px-3 py-2">
+                <div className="flex items-center justify-end gap-1.5 border-t border-[#e2e8f0] px-3 py-2">
                   <button
                     onClick={() => router.push(`/dashboard/employees/${emp.id}`)}
-                    className="flex items-center gap-1.5 rounded-lg border border-[#e2e8f0] px-3 py-1.5 text-xs font-medium text-[#64748b] hover:bg-[#1E4D3D]/10 hover:text-[#1E4D3D] transition-colors"
+                    className="flex items-center gap-1 rounded-lg border border-[#e2e8f0] px-2.5 py-1.5 text-xs font-medium text-[#64748b] hover:bg-[#1E4D3D]/10 hover:text-[#1E4D3D] transition-colors"
                   >
                     <Eye className="h-3.5 w-3.5" />
                     View
                   </button>
                   <button
                     onClick={() => router.push(`/dashboard/employees/${emp.id}`)}
-                    className="flex items-center gap-1.5 rounded-lg border border-[#e2e8f0] px-3 py-1.5 text-xs font-medium text-[#64748b] hover:bg-[#F9A825]/10 hover:text-[#F9A825] transition-colors"
+                    className="flex items-center gap-1 rounded-lg border border-[#e2e8f0] px-2.5 py-1.5 text-xs font-medium text-[#64748b] hover:bg-amber-50 hover:text-amber-600 transition-colors"
                   >
                     <Edit className="h-3.5 w-3.5" />
                     Edit
                   </button>
                   <button
                     onClick={() => setToggleEmployee(emp)}
-                    className={`flex items-center gap-1.5 rounded-lg border border-[#e2e8f0] px-3 py-1.5 text-xs font-medium transition-colors ${
+                    className={`flex items-center gap-1 rounded-lg border border-[#e2e8f0] px-2.5 py-1.5 text-xs font-medium transition-colors ${
                       emp.isActive
-                        ? "text-[#64748b] hover:bg-[#D32F2F]/10 hover:text-[#D32F2F]"
-                        : "text-[#64748b] hover:bg-green-100 hover:text-green-700"
+                        ? "text-[#64748b] hover:bg-amber-50 hover:text-amber-600"
+                        : "text-[#64748b] hover:bg-green-50 hover:text-green-700"
                     }`}
                   >
-                    <UserX className="h-3.5 w-3.5" />
+                    {emp.isActive ? <UserX className="h-3.5 w-3.5" /> : <UserCheck2 className="h-3.5 w-3.5" />}
                     {emp.isActive ? "Disable" : "Enable"}
+                  </button>
+                  <button
+                    onClick={() => setDeleteEmployee(emp)}
+                    className="flex items-center gap-1 rounded-lg border border-[#e2e8f0] px-2.5 py-1.5 text-xs font-medium text-[#64748b] hover:bg-red-50 hover:text-red-600 transition-colors"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    Remove
                   </button>
                 </div>
               </Card>
@@ -277,32 +386,29 @@ export default function EmployeesPage() {
                 <TableRow>
                   <TableHead>Name</TableHead>
                   <TableHead>Mobile</TableHead>
-                  <TableHead>Email</TableHead>
                   <TableHead>Territory</TableHead>
                   <TableHead>Commission %</TableHead>
-                  <TableHead>Customers</TableHead>
-                  <TableHead>Orders</TableHead>
+                  <TableHead className="text-center">Customers</TableHead>
+                  <TableHead className="text-center">Orders</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {employees.map((emp) => (
-                  <TableRow
-                    key={emp.id}
-                    className="cursor-pointer"
-                    onClick={() => router.push(`/dashboard/employees/${emp.id}`)}
-                  >
+                  <TableRow key={emp.id} className="cursor-pointer" onClick={() => router.push(`/dashboard/employees/${emp.id}`)}>
                     <TableCell>
                       <div className="flex items-center gap-3">
-                        <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-[#1E4D3D]/10 text-xs font-bold text-[#1E4D3D]">
+                        <div className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-xs font-bold ${emp.isActive ? "bg-[#1E4D3D]/10 text-[#1E4D3D]" : "bg-gray-100 text-gray-400"}`}>
                           {emp.name.charAt(0).toUpperCase()}
                         </div>
-                        <span className="font-medium text-[#1a1a1a]">{emp.name}</span>
+                        <div>
+                          <span className="font-medium text-[#1a1a1a]">{emp.name}</span>
+                          <p className="text-xs text-[#94a3b8]">{emp.email}</p>
+                        </div>
                       </div>
                     </TableCell>
                     <TableCell className="text-[#64748b]">{emp.mobile}</TableCell>
-                    <TableCell className="text-[#64748b]">{emp.email}</TableCell>
                     <TableCell className="text-[#64748b]">
                       {emp.territory || <span className="text-[#94a3b8]">—</span>}
                     </TableCell>
@@ -314,18 +420,10 @@ export default function EmployeesPage() {
                     <TableCell className="text-center text-[#64748b]">{emp._count.customers}</TableCell>
                     <TableCell className="text-center text-[#64748b]">{emp._count.orders}</TableCell>
                     <TableCell>
-                      {emp.isActive ? (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-700">
-                          <CheckCircle className="h-3 w-3" />Active
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-700">
-                          <XCircle className="h-3 w-3" />Disabled
-                        </span>
-                      )}
+                      <StatusBadge isActive={emp.isActive} />
                     </TableCell>
                     <TableCell>
-                      <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex items-center justify-end gap-0.5" onClick={(e) => e.stopPropagation()}>
                         <button
                           onClick={() => router.push(`/dashboard/employees/${emp.id}`)}
                           className="rounded p-1.5 text-[#64748b] hover:bg-[#1E4D3D]/10 hover:text-[#1E4D3D] transition-colors"
@@ -335,7 +433,7 @@ export default function EmployeesPage() {
                         </button>
                         <button
                           onClick={() => router.push(`/dashboard/employees/${emp.id}`)}
-                          className="rounded p-1.5 text-[#64748b] hover:bg-[#F9A825]/10 hover:text-[#F9A825] transition-colors"
+                          className="rounded p-1.5 text-[#64748b] hover:bg-amber-50 hover:text-amber-600 transition-colors"
                           title="Edit"
                         >
                           <Edit className="h-4 w-4" />
@@ -344,12 +442,19 @@ export default function EmployeesPage() {
                           onClick={() => setToggleEmployee(emp)}
                           className={`rounded p-1.5 transition-colors ${
                             emp.isActive
-                              ? "text-[#64748b] hover:bg-[#D32F2F]/10 hover:text-[#D32F2F]"
-                              : "text-[#64748b] hover:bg-green-100 hover:text-green-700"
+                              ? "text-[#64748b] hover:bg-amber-50 hover:text-amber-600"
+                              : "text-[#64748b] hover:bg-green-50 hover:text-green-700"
                           }`}
                           title={emp.isActive ? "Disable" : "Enable"}
                         >
-                          <UserX className="h-4 w-4" />
+                          {emp.isActive ? <UserX className="h-4 w-4" /> : <UserCheck2 className="h-4 w-4" />}
+                        </button>
+                        <button
+                          onClick={() => setDeleteEmployee(emp)}
+                          className="rounded p-1.5 text-[#64748b] hover:bg-red-50 hover:text-red-600 transition-colors"
+                          title="Remove employee"
+                        >
+                          <Trash2 className="h-4 w-4" />
                         </button>
                       </div>
                     </TableCell>
@@ -424,6 +529,14 @@ export default function EmployeesPage() {
         loading={toggleLoading}
         onConfirm={handleToggleActive}
         onCancel={() => setToggleEmployee(null)}
+      />
+
+      <DeleteConfirmModal
+        open={!!deleteEmployee}
+        employee={deleteEmployee}
+        loading={deleteLoading}
+        onConfirm={handleDelete}
+        onCancel={() => setDeleteEmployee(null)}
       />
 
       {/* Mobile FAB */}

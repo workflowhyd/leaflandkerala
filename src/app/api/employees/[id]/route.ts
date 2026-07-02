@@ -83,7 +83,10 @@ export async function DELETE(
   }
 
   const { id } = await params;
-  const employee = await prisma.employee.update({
+  const employee = await prisma.employee.findUnique({ where: { id } });
+  if (!employee) return NextResponse.json({ error: "Employee not found" }, { status: 404 });
+
+  await prisma.employee.update({
     where: { id },
     data: { isActive: false },
   });
@@ -93,11 +96,20 @@ export async function DELETE(
     data: { isActive: false },
   });
 
-  // Disable in Supabase Auth
+  // Disable in Supabase Auth so the account can no longer log in
   const supabaseAdmin = createSupabaseAdmin();
   await supabaseAdmin.auth.admin.updateUserById(employee.userId, {
-    ban_duration: "876600h",
+    ban_duration: "876600h", // ~100 years
   });
+
+  await prisma.activityLog.create({
+    data: {
+      userId: session.userId,
+      type: "EMPLOYEE_DELETE",
+      description: `Removed employee: ${employee.name}`,
+      metadata: { employeeId: id, employeeName: employee.name },
+    },
+  }).catch(() => {});
 
   return NextResponse.json({ success: true });
 }
