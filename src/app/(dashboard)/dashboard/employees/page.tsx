@@ -154,7 +154,7 @@ export default function EmployeesPage() {
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("active");
   const [showAddModal, setShowAddModal] = useState(false);
   const [toggleEmployee, setToggleEmployee] = useState<Employee | null>(null);
   const [deleteEmployee, setDeleteEmployee] = useState<Employee | null>(null);
@@ -218,7 +218,8 @@ export default function EmployeesPage() {
       if (res.ok) {
         success("Employee removed", `${deleteEmployee.name} has been removed from the system`);
         setDeleteEmployee(null);
-        fetchEmployees();
+        setStatusFilter("active");
+        setPage(1);
       } else {
         const data = await res.json().catch(() => ({}));
         toastError(data.error || "Failed to remove employee");
