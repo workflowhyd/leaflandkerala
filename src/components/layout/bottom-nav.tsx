@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Package, ShoppingCart, Users, Settings } from "lucide-react";
+import { LayoutDashboard, ShoppingCart, Users, Settings, Bell } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface BottomNavItem {
@@ -10,22 +10,30 @@ interface BottomNavItem {
   href: string;
   icon: React.ElementType;
   adminOnly?: boolean;
+  badge?: number;
 }
-
-const items: BottomNavItem[] = [
-  { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-  { label: "Products", href: "/dashboard/products", icon: Package },
-  { label: "Orders", href: "/dashboard/orders", icon: ShoppingCart },
-  { label: "Customers", href: "/dashboard/customers", icon: Users },
-  { label: "Settings", href: "/dashboard/settings", icon: Settings, adminOnly: true },
-];
 
 interface BottomNavProps {
   userRole: "ADMIN" | "EMPLOYEE";
+  notificationCount?: number;
 }
 
-export function BottomNav({ userRole }: BottomNavProps) {
+export function BottomNav({ userRole, notificationCount = 0 }: BottomNavProps) {
   const pathname = usePathname();
+
+  const items: BottomNavItem[] = [
+    { label: "Dashboard", href: "/dashboard",           icon: LayoutDashboard },
+    { label: "Orders",    href: "/dashboard/orders",    icon: ShoppingCart },
+    { label: "Customers", href: "/dashboard/customers", icon: Users },
+    {
+      label: "Alerts",
+      href: "/dashboard/notifications",
+      icon: Bell,
+      adminOnly: true,
+      badge: notificationCount > 0 ? notificationCount : undefined,
+    },
+    { label: "Settings",  href: "/dashboard/settings",  icon: Settings, adminOnly: true },
+  ];
 
   const isActive = (href: string) => {
     if (href === "/dashboard") return pathname === "/dashboard";
@@ -48,18 +56,18 @@ export function BottomNav({ userRole }: BottomNavProps) {
               active ? "text-[#1E4D3D]" : "text-[#94a3b8]"
             )}
           >
-            <div
-              className={cn(
-                "flex h-7 w-7 items-center justify-center rounded-lg transition-all duration-200",
-                active ? "bg-[#1E4D3D]/10" : ""
-              )}
-            >
+            <div className="relative flex h-7 w-7 items-center justify-center rounded-lg">
               <Icon
                 className={cn(
                   "h-5 w-5 transition-colors",
                   active ? "text-[#1E4D3D]" : "text-[#94a3b8]"
                 )}
               />
+              {item.badge && item.badge > 0 && (
+                <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-0.5 text-[9px] font-bold text-white">
+                  {item.badge > 9 ? "9+" : item.badge}
+                </span>
+              )}
             </div>
             <span className={active ? "text-[#1E4D3D]" : ""}>{item.label}</span>
           </Link>

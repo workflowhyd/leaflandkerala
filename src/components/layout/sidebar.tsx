@@ -7,17 +7,16 @@ import {
   LayoutDashboard,
   Package,
   Users,
-  MapPin,
   ShoppingCart,
   UserCheck,
   BarChart3,
-  Map,
   Settings,
   Leaf,
   LogOut,
   ChevronRight,
   X,
-  ClipboardList,
+  Bell,
+  CalendarRange,
 } from "lucide-react";
 
 interface NavItem {
@@ -25,40 +24,8 @@ interface NavItem {
   href: string;
   icon: React.ElementType;
   adminOnly?: boolean;
+  badge?: number;
 }
-
-const navItems: NavItem[] = [
-  { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-  { label: "Products", href: "/dashboard/products", icon: Package },
-  { label: "Customers", href: "/dashboard/customers", icon: Users },
-  { label: "Field Visits", href: "/dashboard/field-visits", icon: MapPin },
-  { label: "Orders", href: "/dashboard/orders", icon: ShoppingCart },
-  {
-    label: "Employees",
-    href: "/dashboard/employees",
-    icon: UserCheck,
-    adminOnly: true,
-  },
-  {
-    label: "Reports",
-    href: "/dashboard/reports",
-    icon: BarChart3,
-    adminOnly: true,
-  },
-  { label: "Maps", href: "/dashboard/maps", icon: Map, adminOnly: true },
-  {
-    label: "Registrations",
-    href: "/dashboard/registrations",
-    icon: ClipboardList,
-    adminOnly: true,
-  },
-  {
-    label: "Settings",
-    href: "/dashboard/settings",
-    icon: Settings,
-    adminOnly: true,
-  },
-];
 
 interface SidebarProps {
   userRole: "ADMIN" | "EMPLOYEE";
@@ -66,14 +33,31 @@ interface SidebarProps {
   onLogout: () => void;
   onClose?: () => void;
   isMobile?: boolean;
+  notificationCount?: number;
 }
 
-export function Sidebar({ userRole, userName, onLogout, onClose, isMobile }: SidebarProps) {
+export function Sidebar({ userRole, userName, onLogout, onClose, isMobile, notificationCount = 0 }: SidebarProps) {
   const pathname = usePathname();
 
-  const visibleItems = navItems.filter(
-    (item) => !item.adminOnly || userRole === "ADMIN"
-  );
+  const navItems: NavItem[] = [
+    { label: "Dashboard",     href: "/dashboard",               icon: LayoutDashboard },
+    { label: "Orders",        href: "/dashboard/orders",        icon: ShoppingCart },
+    { label: "Weekly Orders", href: "/dashboard/orders/weekly", icon: CalendarRange, adminOnly: true },
+    { label: "Products",      href: "/dashboard/products",      icon: Package },
+    { label: "Customers",     href: "/dashboard/customers",     icon: Users },
+    { label: "Employees",     href: "/dashboard/employees",     icon: UserCheck, adminOnly: true },
+    { label: "Reports",       href: "/dashboard/reports",       icon: BarChart3, adminOnly: true },
+    {
+      label: "Notifications",
+      href: "/dashboard/notifications",
+      icon: Bell,
+      adminOnly: true,
+      badge: notificationCount > 0 ? notificationCount : undefined,
+    },
+    { label: "Settings",      href: "/dashboard/settings",      icon: Settings, adminOnly: true },
+  ];
+
+  const visibleItems = navItems.filter((item) => !item.adminOnly || userRole === "ADMIN");
 
   const isActive = (href: string) => {
     if (href === "/dashboard") return pathname === "/dashboard";
@@ -131,16 +115,18 @@ export function Sidebar({ userRole, userName, onLogout, onClose, isMobile }: Sid
                 >
                   <Icon
                     className={cn(
-                      "h-4 w-4 flex-shrink-0 transition-transform duration-150",
-                      active
-                        ? "text-[#F8F5EE]"
-                        : "text-[#F8F5EE]/60 group-hover:text-[#F8F5EE]"
+                      "h-4 w-4 flex-shrink-0",
+                      active ? "text-[#F8F5EE]" : "text-[#F8F5EE]/60 group-hover:text-[#F8F5EE]"
                     )}
                   />
                   <span className="flex-1">{item.label}</span>
-                  {active && (
+                  {item.badge && item.badge > 0 ? (
+                    <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-bold text-white">
+                      {item.badge > 9 ? "9+" : item.badge}
+                    </span>
+                  ) : active ? (
                     <ChevronRight className="h-3.5 w-3.5 text-[#F8F5EE]/60" />
-                  )}
+                  ) : null}
                 </Link>
               </li>
             );
@@ -154,12 +140,8 @@ export function Sidebar({ userRole, userName, onLogout, onClose, isMobile }: Sid
             {initials}
           </div>
           <div className="flex min-w-0 flex-col leading-tight">
-            <span className="truncate text-sm font-medium text-[#F8F5EE]">
-              {userName}
-            </span>
-            <span className="text-[10px] text-[#F8F5EE]/50 uppercase tracking-wide">
-              {userRole}
-            </span>
+            <span className="truncate text-sm font-medium text-[#F8F5EE]">{userName}</span>
+            <span className="text-[10px] text-[#F8F5EE]/50 uppercase tracking-wide">{userRole}</span>
           </div>
         </div>
         <button

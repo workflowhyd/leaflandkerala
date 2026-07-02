@@ -97,7 +97,8 @@ export function TopNav({
       </button>
 
       {/* Notifications */}
-      <button
+      <Link
+        href="/dashboard/notifications"
         className="relative flex h-9 w-9 items-center justify-center rounded-full text-[#64748b] hover:bg-[#f1f5f9] hover:text-[#1a1a1a] transition-colors flex-shrink-0"
         aria-label={`${notificationCount} notifications`}
       >
@@ -107,7 +108,7 @@ export function TopNav({
             {notificationCount > 9 ? "9+" : notificationCount}
           </span>
         )}
-      </button>
+      </Link>
 
       {/* User dropdown */}
       <div className="relative flex-shrink-0" ref={dropdownRef}>

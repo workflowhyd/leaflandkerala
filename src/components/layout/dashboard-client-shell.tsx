@@ -15,12 +15,14 @@ const PAGE_TITLES: Record<string, string> = {
   "/dashboard/products": "Products",
   "/dashboard/customers": "Customers",
   "/dashboard/orders": "Orders",
+  "/dashboard/orders/weekly": "Weekly Orders",
   "/dashboard/employees": "Employees",
   "/dashboard/reports": "Reports",
-  "/dashboard/maps": "Maps",
   "/dashboard/settings": "Settings",
-  "/dashboard/field-visits": "Field Visits",
+  "/dashboard/notifications": "Notifications",
   "/dashboard/registrations": "Registrations",
+  "/dashboard/field-visits": "Field Visits",
+  "/dashboard/maps": "Maps",
 };
 
 function getPageTitle(pathname: string): string {
@@ -44,8 +46,23 @@ export function DashboardClientShell({
   const router = useRouter();
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [notificationCount, setNotificationCount] = useState(0);
 
   const pageTitle = getPageTitle(pathname);
+
+  // Fetch notification count for admin
+  useEffect(() => {
+    if (session.role !== "ADMIN") return;
+    const fetchCount = () => {
+      fetch("/api/admin/notifications")
+        .then((r) => r.ok ? r.json() : null)
+        .then((d) => { if (d?.totalCount !== undefined) setNotificationCount(d.totalCount); })
+        .catch(() => {});
+    };
+    fetchCount();
+    const interval = setInterval(fetchCount, 60_000);
+    return () => clearInterval(interval);
+  }, [session.role]);
 
   // Close drawer on route change
   useEffect(() => {
@@ -93,6 +110,7 @@ export function DashboardClientShell({
             userRole={session.role}
             userName={session.name}
             onLogout={handleLogout}
+            notificationCount={notificationCount}
           />
         </div>
 
@@ -103,22 +121,18 @@ export function DashboardClientShell({
             aria-modal="true"
             role="dialog"
           >
-            {/* Backdrop */}
             <div
               className="absolute inset-0 bg-black/50"
               onClick={() => setMobileMenuOpen(false)}
             />
-            {/* Drawer panel */}
-            <div
-              className="absolute left-0 top-0 h-full w-64 shadow-2xl"
-              style={{}}
-            >
+            <div className="absolute left-0 top-0 h-full w-64 shadow-2xl">
               <Sidebar
                 userRole={session.role}
                 userName={session.name}
                 onLogout={handleLogout}
                 onClose={() => setMobileMenuOpen(false)}
                 isMobile
+                notificationCount={notificationCount}
               />
             </div>
           </div>
@@ -130,13 +144,14 @@ export function DashboardClientShell({
             title={pageTitle}
             userName={session.name}
             userRole={session.role}
+            notificationCount={notificationCount}
             onLogout={handleLogout}
             onMenuToggle={() => setMobileMenuOpen((prev) => !prev)}
           />
           <main className="flex-1 overflow-y-auto p-4 pb-20 lg:p-6 lg:pb-6">
             {children}
           </main>
-          <BottomNav userRole={session.role} />
+          <BottomNav userRole={session.role} notificationCount={notificationCount} />
         </div>
       </div>
     </ToastProvider>
