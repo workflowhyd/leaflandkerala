@@ -17,6 +17,7 @@ import {
   X,
   Bell,
   CalendarRange,
+  ClipboardCheck,
 } from "lucide-react";
 
 interface NavItem {
@@ -46,13 +47,19 @@ export function Sidebar({ userRole, userName, onLogout, onClose, isMobile, notif
     { label: "Products",      href: "/dashboard/products",      icon: Package },
     { label: "Customers",     href: "/dashboard/customers",     icon: Users },
     { label: "Employees",     href: "/dashboard/employees",     icon: UserCheck, adminOnly: true },
+    {
+      label: "Approvals",
+      href: "/dashboard/approvals",
+      icon: ClipboardCheck,
+      adminOnly: true,
+      badge: notificationCount > 0 ? notificationCount : undefined,
+    },
     { label: "Reports",       href: "/dashboard/reports",       icon: BarChart3, adminOnly: true },
     {
       label: "Notifications",
       href: "/dashboard/notifications",
       icon: Bell,
       adminOnly: true,
-      badge: notificationCount > 0 ? notificationCount : undefined,
     },
     { label: "Settings",      href: "/dashboard/settings",      icon: Settings, adminOnly: true },
   ];

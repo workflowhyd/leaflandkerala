@@ -17,6 +17,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/dashboard/orders": "Orders",
   "/dashboard/orders/weekly": "Weekly Orders",
   "/dashboard/employees": "Employees",
+  "/dashboard/approvals": "Employee Approvals",
   "/dashboard/reports": "Reports",
   "/dashboard/settings": "Settings",
   "/dashboard/notifications": "Notifications",
@@ -56,7 +57,7 @@ export function DashboardClientShell({
     const fetchCount = () => {
       fetch("/api/admin/notifications")
         .then((r) => r.ok ? r.json() : null)
-        .then((d) => { if (d?.totalCount !== undefined) setNotificationCount(d.totalCount); })
+        .then((d) => { if (d?.pendingRegistrations !== undefined) setNotificationCount(d.pendingRegistrations); })
         .catch(() => {});
     };
     fetchCount();

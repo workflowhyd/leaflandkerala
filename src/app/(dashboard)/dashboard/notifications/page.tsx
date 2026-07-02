@@ -300,7 +300,9 @@ export default function NotificationsPage() {
         fetch("/api/admin/notifications"),
       ]);
       const [regData, notifData] = await Promise.all([regRes.json(), notifRes.json()]);
-      if (Array.isArray(regData)) setRegistrations(regData);
+      // API returns { requests, total, pendingCount }
+      const regs = Array.isArray(regData) ? regData : (regData.requests ?? []);
+      setRegistrations(regs);
       if (notifData && !notifData.error) setNotifications(notifData);
     } finally {
       setLoading(false);
