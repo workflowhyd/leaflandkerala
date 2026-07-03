@@ -18,6 +18,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/dashboard/orders/weekly": "Weekly Orders",
   "/dashboard/employees": "Employees",
   "/dashboard/approvals": "Employee Approvals",
+  "/dashboard/returns": "Returns",
   "/dashboard/reports": "Reports",
   "/dashboard/settings": "Settings",
   "/dashboard/notifications": "Notifications",
@@ -48,6 +49,7 @@ export function DashboardClientShell({
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [notificationCount, setNotificationCount] = useState(0);
+  const [pendingReturnsCount, setPendingReturnsCount] = useState(0);
 
   const pageTitle = getPageTitle(pathname);
 
@@ -57,7 +59,10 @@ export function DashboardClientShell({
     const fetchCount = () => {
       fetch("/api/admin/notifications")
         .then((r) => r.ok ? r.json() : null)
-        .then((d) => { if (d?.pendingRegistrations !== undefined) setNotificationCount(d.pendingRegistrations); })
+        .then((d) => {
+          if (d?.pendingRegistrations !== undefined) setNotificationCount(d.pendingRegistrations);
+          if (d?.pendingReturns !== undefined) setPendingReturnsCount(d.pendingReturns);
+        })
         .catch(() => {});
     };
     fetchCount();
@@ -112,6 +117,7 @@ export function DashboardClientShell({
             userName={session.name}
             onLogout={handleLogout}
             notificationCount={notificationCount}
+            pendingReturnsCount={pendingReturnsCount}
           />
         </div>
 
@@ -134,6 +140,7 @@ export function DashboardClientShell({
                 onClose={() => setMobileMenuOpen(false)}
                 isMobile
                 notificationCount={notificationCount}
+                pendingReturnsCount={pendingReturnsCount}
               />
             </div>
           </div>

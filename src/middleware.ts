@@ -10,13 +10,16 @@ const ADMIN_ONLY = [
   "/dashboard/maps",
 ];
 
+const STATIC_ASSET_RE = /\.(svg|png|jpe?g|gif|webp|ico|css|js|map|woff2?|ttf)$/i;
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   const isApiRoute = pathname.startsWith("/api/");
   const isPublic =
     PUBLIC_PAGES.some((r) => pathname.startsWith(r)) ||
-    PUBLIC_API.some((r) => pathname.startsWith(r));
+    PUBLIC_API.some((r) => pathname.startsWith(r)) ||
+    STATIC_ASSET_RE.test(pathname);
 
   // Build a response we can mutate (for cookie refresh)
   let response = NextResponse.next({ request });

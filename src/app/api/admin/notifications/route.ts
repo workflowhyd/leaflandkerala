@@ -12,7 +12,7 @@ export async function GET() {
   const last24h = new Date(now.getTime() - 24 * 60 * 60 * 1000);
   const last48h = new Date(now.getTime() - 48 * 60 * 60 * 1000);
 
-  const [pendingRegistrations, newOrders, outForDelivery, lowStock] = await Promise.all([
+  const [pendingRegistrations, newOrders, outForDelivery, lowStock, pendingReturns] = await Promise.all([
     prisma.employeeRegistrationRequest.findMany({
       where: { status: "PENDING" },
       orderBy: { submittedAt: "desc" },
@@ -31,6 +31,12 @@ export async function GET() {
       take: 10,
     }),
     prisma.product.count({ where: { stock: { lt: 10 }, isActive: true } }),
+    prisma.return.findMany({
+      where: { status: "PENDING" },
+      include: { customer: { select: { name: true } }, order: { select: { orderNumber: true } } },
+      orderBy: { createdAt: "desc" },
+      take: 10,
+    }),
   ]);
 
   type NotificationItem = {
@@ -81,11 +87,24 @@ export async function GET() {
     });
   }
 
+  for (const ret of pendingReturns) {
+    items.push({
+      id: `ret-${ret.id}`,
+      type: "RETURN_REQUEST",
+      title: "Return Request",
+      body: `${ret.returnNumber} — ${ret.customer.name} on order ${ret.order.orderNumber}`,
+      createdAt: ret.createdAt.toISOString(),
+      href: `/dashboard/returns`,
+      urgent: true,
+    });
+  }
+
   items.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
   return NextResponse.json({
-    totalCount: pendingRegistrations.length + newOrders.length,
+    totalCount: pendingRegistrations.length + newOrders.length + pendingReturns.length,
     pendingRegistrations: pendingRegistrations.length,
+    pendingReturns: pendingReturns.length,
     lowStockCount: lowStock,
     items,
   });

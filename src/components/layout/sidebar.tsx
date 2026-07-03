@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { Logo } from "@/components/ui/logo";
 import {
   LayoutDashboard,
   Package,
@@ -17,6 +18,7 @@ import {
   Bell,
   CalendarRange,
   ClipboardCheck,
+  Undo2,
 } from "lucide-react";
 
 interface NavItem {
@@ -34,9 +36,10 @@ interface SidebarProps {
   onClose?: () => void;
   isMobile?: boolean;
   notificationCount?: number;
+  pendingReturnsCount?: number;
 }
 
-export function Sidebar({ userRole, userName, onLogout, onClose, isMobile, notificationCount = 0 }: SidebarProps) {
+export function Sidebar({ userRole, userName, onLogout, onClose, isMobile, notificationCount = 0, pendingReturnsCount = 0 }: SidebarProps) {
   const pathname = usePathname();
 
   const navItems: NavItem[] = [
@@ -52,6 +55,13 @@ export function Sidebar({ userRole, userName, onLogout, onClose, isMobile, notif
       icon: ClipboardCheck,
       adminOnly: true,
       badge: notificationCount > 0 ? notificationCount : undefined,
+    },
+    {
+      label: "Returns",
+      href: "/dashboard/returns",
+      icon: Undo2,
+      adminOnly: true,
+      badge: pendingReturnsCount > 0 ? pendingReturnsCount : undefined,
     },
     { label: "Reports",       href: "/dashboard/reports",       icon: BarChart3, adminOnly: true },
     {
@@ -79,9 +89,8 @@ export function Sidebar({ userRole, userName, onLogout, onClose, isMobile, notif
 
   return (
     <aside className="flex h-full w-60 flex-col bg-[#1E4D3D] text-[#F8F5EE]">
-      <div className="flex h-16 items-center gap-3 border-b border-[#F8F5EE]/10 px-4">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/logo.svg" alt="Leaf Land Kerala" className="h-9 w-auto brightness-0 invert flex-shrink-0" />
+      <div className="flex items-center gap-3 border-b border-[#F8F5EE]/10 px-4 py-3">
+        <Logo size="md" />
         <div className="flex flex-col leading-tight flex-1 min-w-0">
           <span className="text-[10px] text-[#F8F5EE]/60 uppercase tracking-wider">
             Agriculture ERP

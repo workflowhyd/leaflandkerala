@@ -16,6 +16,7 @@ import {
   Calendar,
   ShoppingCart,
   Upload,
+  Undo2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
@@ -29,7 +30,7 @@ import {
   TableCell,
 } from "@/components/ui/table";
 import { CustomerStatusBadge } from "@/components/customers/customer-status-badge";
-import { formatDate, formatCurrency, getStatusLabel } from "@/lib/utils";
+import { formatDate, formatCurrency, getStatusLabel, getStatusColor } from "@/lib/utils";
 
 interface CustomerLocation {
   latitude: number;
@@ -59,6 +60,15 @@ interface Order {
   items: { product: { name: string } }[];
 }
 
+interface CustomerReturn {
+  id: string;
+  returnNumber: string;
+  status: string;
+  reason: string;
+  createdAt: string;
+  items: { quantity: number; product: { name: string } }[];
+}
+
 interface Customer {
   id: string;
   name: string;
@@ -78,6 +88,7 @@ interface Customer {
   photos: CustomerPhoto[];
   fieldVisits: FieldVisit[];
   orders: Order[];
+  returns: CustomerReturn[];
 }
 
 const STATUS_OPTIONS = [
@@ -562,6 +573,53 @@ export default function CustomerProfilePage() {
                           </span>
                         </TableCell>
                         <TableCell className="text-[#64748b]">{formatDate(order.createdAt)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Returns */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Undo2 className="h-4 w-4 text-[#3B7A57]" />
+                Returns
+                <span className="ml-auto text-sm font-normal text-[#64748b]">
+                  {customer.returns.length} return{customer.returns.length !== 1 ? "s" : ""}
+                </span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-0 px-0 pb-0">
+              {customer.returns.length === 0 ? (
+                <div className="px-6 pb-6 text-sm text-[#64748b]">No returns yet</div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Return Date</TableHead>
+                      <TableHead>Products Returned</TableHead>
+                      <TableHead>Quantity</TableHead>
+                      <TableHead>Reason</TableHead>
+                      <TableHead>Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {customer.returns.map((ret) => (
+                      <TableRow key={ret.id}>
+                        <TableCell className="text-[#64748b]">{formatDate(ret.createdAt)}</TableCell>
+                        <TableCell className="text-[#64748b]">
+                          {ret.items.map((i) => i.product.name).join(", ") || "—"}
+                        </TableCell>
+                        <TableCell>{ret.items.reduce((sum, i) => sum + i.quantity, 0)}</TableCell>
+                        <TableCell className="text-[#64748b]">{getStatusLabel(ret.reason)}</TableCell>
+                        <TableCell>
+                          <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${getStatusColor(ret.status)}`}>
+                            {getStatusLabel(ret.status)}
+                          </span>
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>

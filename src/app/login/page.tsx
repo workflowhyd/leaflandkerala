@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { Logo } from "@/components/ui/logo";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -60,8 +61,7 @@ export default function LoginPage() {
 
         {/* Logo */}
         <div className="relative z-10">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo.svg" alt="Leaf Land Kerala" className="h-16 w-auto brightness-0 invert" />
+          <Logo size="lg" />
         </div>
 
         {/* Hero illustration */}
@@ -99,8 +99,7 @@ export default function LoginPage() {
         <div className="w-full max-w-sm">
           {/* Mobile logo */}
           <div className="flex justify-center mb-10 lg:hidden">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/logo.svg" alt="Leaf Land Kerala" className="h-20 w-auto" />
+            <Logo size="xl" />
           </div>
 
           <div className="mb-8">

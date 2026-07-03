@@ -53,6 +53,10 @@ export function getStatusColor(status: string): string {
     FOLLOW_UP: "bg-yellow-100 text-yellow-700",
     ORDER_PLACED: "bg-emerald-100 text-emerald-700",
     ACTIVE: "bg-teal-100 text-teal-700",
+    PENDING: "bg-yellow-100 text-yellow-800",
+    APPROVED: "bg-green-100 text-green-800",
+    REJECTED: "bg-red-100 text-red-800",
+    COMPLETED: "bg-teal-100 text-teal-800",
   };
   return statusColors[status] || "bg-gray-100 text-gray-700";
 }
@@ -79,6 +83,18 @@ export function getStatusLabel(status: string): string {
     FARMING_TOOLS: "Farming Tools",
     IRRIGATION_SUPPLIES: "Irrigation Supplies",
     AGRICULTURAL_EQUIPMENT: "Agricultural Equipment",
+    PENDING: "Pending Approval",
+    APPROVED: "Approved",
+    REJECTED: "Rejected",
+    COMPLETED: "Return Completed",
+    DAMAGED_PRODUCT: "Damaged Product",
+    WRONG_PRODUCT_DELIVERED: "Wrong Product Delivered",
+    EXPIRED_PRODUCT: "Expired Product",
+    POOR_QUALITY: "Poor Quality",
+    CUSTOMER_CHANGED_MIND: "Customer Changed Mind",
+    EXCESS_QUANTITY_ORDERED: "Excess Quantity Ordered",
+    PACKAGING_ISSUE: "Packaging Issue",
+    OTHER: "Other",
   };
   return labels[status] || status;
 }

@@ -1,15 +1,15 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Download, FileText, BarChart2, Users, TrendingUp, UserCheck, GitMerge } from "lucide-react";
+import { Download, FileText, BarChart2, Users, TrendingUp, UserCheck, GitMerge, Undo2, Package } from "lucide-react";
 import * as XLSX from "xlsx";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from "recharts";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { formatCurrency, formatDate, getStatusLabel } from "@/lib/utils";
 
-type TabId = "sales" | "products" | "customers" | "employees" | "conversions";
+type TabId = "sales" | "products" | "customers" | "employees" | "conversions" | "returns";
 
 const TABS: { id: TabId; label: string; icon: React.FC<{ className?: string }> }[] = [
   { id: "sales", label: "Sales Report", icon: BarChart2 },
@@ -17,6 +17,7 @@ const TABS: { id: TabId; label: string; icon: React.FC<{ className?: string }> }
   { id: "customers", label: "Customer Growth", icon: Users },
   { id: "employees", label: "Employee Performance", icon: UserCheck },
   { id: "conversions", label: "Visit Conversion", icon: GitMerge },
+  { id: "returns", label: "Returns Report", icon: Undo2 },
 ];
 
 interface SalesData {
@@ -55,6 +56,15 @@ interface ConversionData {
   converted: boolean;
 }
 
+interface ReturnsReportData {
+  totalReturns: number;
+  totalOrders: number;
+  returnRate: number;
+  mostReturnedProducts: { name: string; quantity: number }[];
+  reasonBreakdown: { reason: string; count: number }[];
+  employeeBreakdown: { name: string; count: number }[];
+}
+
 export default function ReportsPage() {
   const [activeTab, setActiveTab] = useState<TabId>("sales");
   const [dateFrom, setDateFrom] = useState(() => {
@@ -70,6 +80,7 @@ export default function ReportsPage() {
   const [customerGrowth, setCustomerGrowth] = useState<CustomerGrowthData[]>([]);
   const [employeeData, setEmployeeData] = useState<EmployeeData[]>([]);
   const [conversionData, setConversionData] = useState<ConversionData[]>([]);
+  const [returnsData, setReturnsData] = useState<ReturnsReportData | null>(null);
   const [loading, setLoading] = useState(false);
 
   const fetchSalesData = useCallback(async () => {
@@ -207,6 +218,51 @@ export default function ReportsPage() {
     setConversionData(result);
   }, []);
 
+  const fetchReturnsData = useCallback(async () => {
+    const [returnsRes, ordersRes] = await Promise.all([
+      fetch("/api/returns?limit=1000"),
+      fetch("/api/orders?limit=1"),
+    ]);
+    if (!returnsRes.ok) return;
+    const returnsData = await returnsRes.json();
+    const totalOrders = ordersRes.ok ? (await ordersRes.json()).total ?? 0 : 0;
+
+    const returns: {
+      status: string;
+      reason: string;
+      employee: { name: string };
+      items: { quantity: number; product: { name: string } }[];
+    }[] = returnsData.returns;
+
+    const productMap: Record<string, number> = {};
+    const reasonMap: Record<string, number> = {};
+    const employeeMap: Record<string, number> = {};
+
+    returns.forEach((r) => {
+      reasonMap[r.reason] = (reasonMap[r.reason] || 0) + 1;
+      employeeMap[r.employee.name] = (employeeMap[r.employee.name] || 0) + 1;
+      r.items.forEach((item) => {
+        productMap[item.product.name] = (productMap[item.product.name] || 0) + item.quantity;
+      });
+    });
+
+    setReturnsData({
+      totalReturns: returnsData.total,
+      totalOrders,
+      returnRate: totalOrders > 0 ? (returnsData.total / totalOrders) * 100 : 0,
+      mostReturnedProducts: Object.entries(productMap)
+        .map(([name, quantity]) => ({ name, quantity }))
+        .sort((a, b) => b.quantity - a.quantity)
+        .slice(0, 10),
+      reasonBreakdown: Object.entries(reasonMap)
+        .map(([reason, count]) => ({ reason, count }))
+        .sort((a, b) => b.count - a.count),
+      employeeBreakdown: Object.entries(employeeMap)
+        .map(([name, count]) => ({ name, count }))
+        .sort((a, b) => b.count - a.count),
+    });
+  }, []);
+
   useEffect(() => {
     setLoading(true);
     const fetchers: Record<TabId, () => Promise<void>> = {
@@ -215,9 +271,10 @@ export default function ReportsPage() {
       customers: fetchCustomerGrowth,
       employees: fetchEmployeeData,
       conversions: fetchConversionData,
+      returns: fetchReturnsData,
     };
     fetchers[activeTab]().finally(() => setLoading(false));
-  }, [activeTab, fetchSalesData, fetchProductData, fetchCustomerGrowth, fetchEmployeeData, fetchConversionData]);
+  }, [activeTab, fetchSalesData, fetchProductData, fetchCustomerGrowth, fetchEmployeeData, fetchConversionData, fetchReturnsData]);
 
   const exportExcel = () => {
     let rows: Record<string, unknown>[] = [];
@@ -237,6 +294,9 @@ export default function ReportsPage() {
     } else if (activeTab === "conversions") {
       rows = conversionData.map((d) => ({ Employee: d.employeeName, Customer: d.customerName, "Visit Date": formatDate(d.visitDate), "Order #": d.orderNumber || "", "Order Date": d.orderDate ? formatDate(d.orderDate) : "", Converted: d.converted ? "Yes" : "No" }));
       sheetName = "Conversions";
+    } else if (activeTab === "returns" && returnsData) {
+      rows = returnsData.mostReturnedProducts.map((d) => ({ Product: d.name, "Units Returned": d.quantity }));
+      sheetName = "Returns";
     }
     const ws = XLSX.utils.json_to_sheet(rows);
     const wb = XLSX.utils.book_new();
@@ -525,6 +585,107 @@ export default function ReportsPage() {
                   )}
                 </CardContent>
               </Card>
+            </div>
+          )}
+
+          {activeTab === "returns" && (
+            <div className="flex flex-col gap-4">
+              <div className="flex items-center gap-4 flex-wrap">
+                <Card className="p-4 flex items-center gap-3">
+                  <Undo2 className="h-6 w-6 text-[#3B7A57]" />
+                  <div>
+                    <p className="text-xs text-[#64748b]">Total Returns</p>
+                    <p className="text-2xl font-bold text-[#1a1a1a]">{returnsData?.totalReturns ?? 0}</p>
+                  </div>
+                </Card>
+                <Card className="p-4 flex items-center gap-3">
+                  <BarChart2 className="h-6 w-6 text-[#3B7A57]" />
+                  <div>
+                    <p className="text-xs text-[#64748b]">Return Rate</p>
+                    <p className="text-2xl font-bold text-[#1a1a1a]">{(returnsData?.returnRate ?? 0).toFixed(1)}%</p>
+                  </div>
+                </Card>
+                <Card className="p-4 flex items-center gap-3">
+                  <Package className="h-6 w-6 text-[#3B7A57]" />
+                  <div>
+                    <p className="text-xs text-[#64748b]">Total Orders</p>
+                    <p className="text-2xl font-bold text-[#1a1a1a]">{returnsData?.totalOrders ?? 0}</p>
+                  </div>
+                </Card>
+              </div>
+
+              <Card>
+                <CardHeader><CardTitle>Most Returned Products</CardTitle></CardHeader>
+                <CardContent>
+                  {!returnsData || returnsData.mostReturnedProducts.length === 0 ? (
+                    <p className="text-[#64748b] text-sm">No returns recorded yet.</p>
+                  ) : (
+                    <ResponsiveContainer width="100%" height={300}>
+                      <BarChart data={returnsData.mostReturnedProducts} layout="vertical" margin={{ left: 24 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                        <XAxis type="number" tick={{ fontSize: 12 }} allowDecimals={false} />
+                        <YAxis type="category" dataKey="name" tick={{ fontSize: 12 }} width={140} />
+                        <Tooltip />
+                        <Bar dataKey="quantity" fill="#1E4D3D" radius={[0, 4, 4, 0]} name="Units Returned" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  )}
+                </CardContent>
+              </Card>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <Card>
+                  <CardHeader><CardTitle>Return Reasons</CardTitle></CardHeader>
+                  <CardContent className="!px-0 !pb-0">
+                    {!returnsData || returnsData.reasonBreakdown.length === 0 ? (
+                      <p className="px-6 pb-6 text-[#64748b] text-sm">No data available.</p>
+                    ) : (
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Reason</TableHead>
+                            <TableHead className="text-right">Count</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {returnsData.reasonBreakdown.map((r, i) => (
+                            <TableRow key={i}>
+                              <TableCell className="font-medium">{getStatusLabel(r.reason)}</TableCell>
+                              <TableCell className="text-right">{r.count}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    )}
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader><CardTitle>Employee-wise Returns</CardTitle></CardHeader>
+                  <CardContent className="!px-0 !pb-0">
+                    {!returnsData || returnsData.employeeBreakdown.length === 0 ? (
+                      <p className="px-6 pb-6 text-[#64748b] text-sm">No data available.</p>
+                    ) : (
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Employee</TableHead>
+                            <TableHead className="text-right">Returns</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {returnsData.employeeBreakdown.map((e, i) => (
+                            <TableRow key={i}>
+                              <TableCell className="font-medium">{e.name}</TableCell>
+                              <TableCell className="text-right">{e.count}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
             </div>
           )}
         </>
