@@ -63,7 +63,7 @@ export async function PATCH(
   }
 
   if (action === "approve") {
-    const { email, password, commissionPercent = 10, territory } = body;
+    const { email, password, territory } = body;
 
     if (!email || !password) {
       return NextResponse.json(
@@ -117,7 +117,6 @@ export async function PATCH(
             name: registrationRequest.fullName,
             email,
             mobile: registrationRequest.mobileNumber,
-            commissionPercent: commissionPercent ?? 10,
             territory: territory || null,
             documents: {
               create: {

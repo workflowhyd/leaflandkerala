@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { Undo2, Eye, CheckCircle, XCircle, Clock, PackageCheck, Search } from "lucide-react";
+import { Undo2, Eye, PackageCheck, Search } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
@@ -11,12 +11,10 @@ import {
 } from "@/components/ui/table";
 import { formatDateTime, getStatusColor, getStatusLabel } from "@/lib/utils";
 
-type ReturnStatus = "PENDING" | "APPROVED" | "REJECTED" | "COMPLETED";
-
 interface ReturnListItem {
   id: string;
   returnNumber: string;
-  status: ReturnStatus;
+  status: string;
   reason: string;
   createdAt: string;
   customer: { name: string; mobile: string };
@@ -29,7 +27,6 @@ interface ReturnListItem {
 interface ReturnDetail extends ReturnListItem {
   reasonNotes: string | null;
   notes: string | null;
-  adminNotes: string | null;
   customer: ReturnListItem["customer"] & { address: string; village: string | null; district: string };
   order: ReturnListItem["order"] & { createdAt: string; totalAmount: number };
   employee: ReturnListItem["employee"] & { mobile: string };
@@ -40,254 +37,12 @@ interface ReturnDetail extends ReturnListItem {
   images: { id: string; imageUrl: string }[];
 }
 
-type StatusFilter = "ALL" | ReturnStatus;
-
-const NON_REUSABLE_REASONS = new Set(["DAMAGED_PRODUCT", "EXPIRED_PRODUCT"]);
-
-function StatusIcon({ status }: { status: ReturnStatus }) {
-  if (status === "PENDING") return <Clock className="h-3 w-3" />;
-  if (status === "APPROVED") return <CheckCircle className="h-3 w-3" />;
-  if (status === "COMPLETED") return <PackageCheck className="h-3 w-3" />;
-  return <XCircle className="h-3 w-3" />;
-}
-
-function StatusBadge({ status }: { status: ReturnStatus }) {
+function StatusBadge({ status }: { status: string }) {
   return (
     <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium ${getStatusColor(status)}`}>
-      <StatusIcon status={status} />
+      <PackageCheck className="h-3 w-3" />
       {getStatusLabel(status)}
     </span>
-  );
-}
-
-/* ─── Approve Modal ─────────────────────────────────────────────────────────── */
-
-function ApproveModal({
-  open, ret, onClose, onSuccess,
-}: {
-  open: boolean; ret: ReturnDetail | null; onClose: () => void; onSuccess: () => void;
-}) {
-  const { success, error: toastError } = useToast();
-  const [adminNotes, setAdminNotes] = useState("");
-  const [restock, setRestock] = useState(true);
-  const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    if (open && ret) {
-      setAdminNotes("");
-      setRestock(!NON_REUSABLE_REASONS.has(ret.reason));
-    }
-  }, [open, ret]);
-
-  async function handleApprove() {
-    if (!ret) return;
-    setLoading(true);
-    try {
-      const res = await fetch(`/api/returns/${ret.id}/status`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "approve", adminNotes, restock }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        toastError(data.error || "Approval failed");
-      } else {
-        success("Return approved", ret.returnNumber);
-        onSuccess();
-        onClose();
-      }
-    } catch {
-      toastError("Network error");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  return (
-    <Modal
-      open={open}
-      onClose={onClose}
-      title="Approve Return"
-      size="md"
-      footer={
-        <>
-          <Button variant="outline" onClick={onClose} disabled={loading}>Cancel</Button>
-          <Button onClick={handleApprove} loading={loading}>Approve Return</Button>
-        </>
-      }
-    >
-      {ret && (
-        <div className="space-y-4">
-          <p className="text-sm" style={{ color: "#64748b" }}>
-            Approving <span className="font-semibold" style={{ color: "#1a1a1a" }}>{ret.returnNumber}</span> for{" "}
-            <span className="font-semibold" style={{ color: "#1a1a1a" }}>{ret.customer.name}</span>
-          </p>
-
-          <label className="flex items-start gap-2.5 rounded-lg border p-3 cursor-pointer" style={{ borderColor: "#e2e8f0" }}>
-            <input
-              type="checkbox"
-              checked={restock}
-              onChange={(e) => setRestock(e.target.checked)}
-              className="mt-0.5 w-4 h-4"
-              style={{ accentColor: "#1E4D3D" }}
-            />
-            <span>
-              <span className="block text-sm font-medium" style={{ color: "#1a1a1a" }}>
-                Restock returned items to inventory
-              </span>
-              <span className="block text-xs mt-0.5" style={{ color: "#94a3b8" }}>
-                Uncheck if the product isn&apos;t reusable (e.g. damaged or expired).
-              </span>
-            </span>
-          </label>
-
-          <div>
-            <label className="block text-sm font-medium mb-1.5" style={{ color: "#374151" }}>
-              Admin Notes (optional)
-            </label>
-            <textarea
-              value={adminNotes}
-              onChange={(e) => setAdminNotes(e.target.value)}
-              rows={3}
-              placeholder="Internal notes about this approval..."
-              className="w-full rounded-lg border px-3 py-2 text-sm outline-none focus:ring-2 resize-none"
-              style={{ borderColor: "#e2e8f0" }}
-            />
-          </div>
-        </div>
-      )}
-    </Modal>
-  );
-}
-
-/* ─── Reject Modal ──────────────────────────────────────────────────────────── */
-
-function RejectModal({
-  open, ret, onClose, onSuccess,
-}: {
-  open: boolean; ret: ReturnDetail | null; onClose: () => void; onSuccess: () => void;
-}) {
-  const { success, error: toastError } = useToast();
-  const [adminNotes, setAdminNotes] = useState("");
-  const [loading, setLoading] = useState(false);
-
-  useEffect(() => { if (open) setAdminNotes(""); }, [open]);
-
-  async function handleReject() {
-    if (!ret) return;
-    setLoading(true);
-    try {
-      const res = await fetch(`/api/returns/${ret.id}/status`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "reject", adminNotes }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        toastError(data.error || "Rejection failed");
-      } else {
-        success("Return rejected", ret.returnNumber);
-        onSuccess();
-        onClose();
-      }
-    } catch {
-      toastError("Network error");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  return (
-    <Modal
-      open={open}
-      onClose={onClose}
-      title="Reject Return"
-      size="sm"
-      footer={
-        <>
-          <Button variant="outline" onClick={onClose} disabled={loading}>Cancel</Button>
-          <Button variant="danger" onClick={handleReject} loading={loading}>Reject</Button>
-        </>
-      }
-    >
-      {ret && (
-        <div className="space-y-4">
-          <p className="text-sm" style={{ color: "#64748b" }}>
-            Rejecting <span className="font-semibold" style={{ color: "#1a1a1a" }}>{ret.returnNumber}</span> from{" "}
-            <span className="font-semibold" style={{ color: "#1a1a1a" }}>{ret.customer.name}</span>
-          </p>
-          <div>
-            <label className="block text-sm font-medium mb-1.5" style={{ color: "#374151" }}>Reason (optional)</label>
-            <textarea
-              value={adminNotes}
-              onChange={(e) => setAdminNotes(e.target.value)}
-              rows={3}
-              placeholder="Reason for rejection..."
-              className="w-full rounded-lg border px-3 py-2 text-sm outline-none focus:ring-2 resize-none"
-              style={{ borderColor: "#e2e8f0" }}
-            />
-          </div>
-        </div>
-      )}
-    </Modal>
-  );
-}
-
-/* ─── Complete Modal ────────────────────────────────────────────────────────── */
-
-function CompleteModal({
-  open, ret, onClose, onSuccess,
-}: {
-  open: boolean; ret: ReturnDetail | null; onClose: () => void; onSuccess: () => void;
-}) {
-  const { success, error: toastError } = useToast();
-  const [loading, setLoading] = useState(false);
-
-  async function handleComplete() {
-    if (!ret) return;
-    setLoading(true);
-    try {
-      const res = await fetch(`/api/returns/${ret.id}/status`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "complete" }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        toastError(data.error || "Failed to mark completed");
-      } else {
-        success("Return marked completed", ret.returnNumber);
-        onSuccess();
-        onClose();
-      }
-    } catch {
-      toastError("Network error");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  return (
-    <Modal
-      open={open}
-      onClose={onClose}
-      title="Mark Return Completed"
-      size="sm"
-      footer={
-        <>
-          <Button variant="outline" onClick={onClose} disabled={loading}>Cancel</Button>
-          <Button onClick={handleComplete} loading={loading}>Mark Completed</Button>
-        </>
-      }
-    >
-      {ret && (
-        <p className="text-sm" style={{ color: "#64748b" }}>
-          Confirm that <span className="font-semibold" style={{ color: "#1a1a1a" }}>{ret.returnNumber}</span> has
-          been fully processed (refund/replacement issued) for{" "}
-          <span className="font-semibold" style={{ color: "#1a1a1a" }}>{ret.customer.name}</span>.
-        </p>
-      )}
-    </Modal>
   );
 }
 
@@ -302,12 +57,7 @@ function DetailRow({ label, value }: { label: string; value: React.ReactNode }) 
   );
 }
 
-function DetailModal({
-  open, ret, onClose, onApprove, onReject, onComplete,
-}: {
-  open: boolean; ret: ReturnDetail | null; onClose: () => void;
-  onApprove: () => void; onReject: () => void; onComplete: () => void;
-}) {
+function DetailModal({ open, ret, onClose }: { open: boolean; ret: ReturnDetail | null; onClose: () => void }) {
   if (!ret) return null;
 
   return (
@@ -377,31 +127,6 @@ function DetailModal({
             <p className="mt-0.5 text-sm" style={{ color: "#64748b" }}>{ret.notes}</p>
           </div>
         )}
-
-        {ret.adminNotes && (
-          <div>
-            <p className="text-xs font-medium uppercase tracking-wide" style={{ color: "#94a3b8" }}>Admin Notes</p>
-            <p className="mt-0.5 text-sm" style={{ color: "#64748b" }}>{ret.adminNotes}</p>
-          </div>
-        )}
-
-        {ret.status === "PENDING" && (
-          <div className="flex gap-3 pt-2 border-t" style={{ borderColor: "#e2e8f0" }}>
-            <button onClick={onReject} className="flex-1 rounded-lg border py-2 text-sm font-medium transition-colors" style={{ borderColor: "#D32F2F", color: "#D32F2F" }}>
-              Reject
-            </button>
-            <button onClick={onApprove} className="flex-1 rounded-lg py-2 text-sm font-medium transition-colors" style={{ backgroundColor: "#1E4D3D", color: "#F8F5EE" }}>
-              Approve
-            </button>
-          </div>
-        )}
-        {ret.status === "APPROVED" && (
-          <div className="flex gap-3 pt-2 border-t" style={{ borderColor: "#e2e8f0" }}>
-            <button onClick={onComplete} className="flex-1 rounded-lg py-2 text-sm font-medium transition-colors" style={{ backgroundColor: "#1E4D3D", color: "#F8F5EE" }}>
-              Mark Completed
-            </button>
-          </div>
-        )}
       </div>
     </Modal>
   );
@@ -413,9 +138,7 @@ export default function ReturnsPage() {
   const { error: toastError } = useToast();
   const [returns, setReturns] = useState<ReturnListItem[]>([]);
   const [total, setTotal] = useState(0);
-  const [pendingCount, setPendingCount] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const limit = 20;
@@ -423,22 +146,17 @@ export default function ReturnsPage() {
   const [detail, setDetail] = useState<ReturnDetail | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [showDetailModal, setShowDetailModal] = useState(false);
-  const [showApproveModal, setShowApproveModal] = useState(false);
-  const [showRejectModal, setShowRejectModal] = useState(false);
-  const [showCompleteModal, setShowCompleteModal] = useState(false);
 
   const fetchReturns = useCallback(async () => {
     setLoading(true);
     try {
       const params = new URLSearchParams({ page: String(page), limit: String(limit) });
-      if (statusFilter !== "ALL") params.set("status", statusFilter);
       if (search) params.set("search", search);
       const res = await fetch(`/api/returns?${params}`);
       if (res.ok) {
         const data = await res.json();
         setReturns(data.returns);
         setTotal(data.total);
-        setPendingCount(data.pendingCount);
       } else {
         toastError("Failed to load returns");
       }
@@ -447,10 +165,10 @@ export default function ReturnsPage() {
     } finally {
       setLoading(false);
     }
-  }, [statusFilter, search, page, toastError]);
+  }, [search, page, toastError]);
 
   useEffect(() => { fetchReturns(); }, [fetchReturns]);
-  useEffect(() => { setPage(1); }, [statusFilter, search]);
+  useEffect(() => { setPage(1); }, [search]);
 
   async function openDetail(id: string) {
     setLoadingDetail(true);
@@ -464,14 +182,6 @@ export default function ReturnsPage() {
     }
   }
 
-  const tabs: { label: string; value: StatusFilter }[] = [
-    { label: "All", value: "ALL" },
-    { label: "Pending", value: "PENDING" },
-    { label: "Approved", value: "APPROVED" },
-    { label: "Rejected", value: "REJECTED" },
-    { label: "Completed", value: "COMPLETED" },
-  ];
-
   const totalPages = Math.max(1, Math.ceil(total / limit));
 
   return (
@@ -479,52 +189,21 @@ export default function ReturnsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold text-[#1a1a1a] lg:text-2xl">Returns</h1>
-          <p className="text-sm text-[#64748b] mt-0.5">Review and process customer return requests</p>
+          <p className="text-sm text-[#64748b] mt-0.5">
+            Log of return items completed directly by employees — no approval required
+          </p>
         </div>
-        {pendingCount > 0 && (
-          <span className="inline-flex items-center rounded-full bg-yellow-100 px-3 py-1 text-sm font-semibold text-yellow-700">
-            {pendingCount} pending
-          </span>
-        )}
       </div>
 
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex gap-1 rounded-xl bg-white p-1 shadow-sm border border-[#e2e8f0] overflow-x-auto">
-          {tabs.map((tab) => (
-            <button
-              key={tab.value}
-              onClick={() => setStatusFilter(tab.value)}
-              className="relative rounded-lg px-3 py-2 text-sm font-medium transition-colors whitespace-nowrap"
-              style={{
-                backgroundColor: statusFilter === tab.value ? "#1E4D3D" : "transparent",
-                color: statusFilter === tab.value ? "#F8F5EE" : "#64748b",
-              }}
-            >
-              {tab.label}
-              {tab.value === "PENDING" && pendingCount > 0 && (
-                <span
-                  className="ml-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-bold"
-                  style={{
-                    backgroundColor: statusFilter === "PENDING" ? "#F8F5EE" : "#1E4D3D",
-                    color: statusFilter === "PENDING" ? "#1E4D3D" : "#F8F5EE",
-                  }}
-                >
-                  {pendingCount}
-                </span>
-              )}
-            </button>
-          ))}
-        </div>
-        <div className="relative w-full sm:w-64">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#94a3b8]" />
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search return #, order #, customer..."
-            className="w-full rounded-lg border py-2 pl-9 pr-3 text-sm outline-none focus:ring-2"
-            style={{ borderColor: "#e2e8f0" }}
-          />
-        </div>
+      <div className="relative w-full sm:w-64">
+        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#94a3b8]" />
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search return #, order #, customer..."
+          className="w-full rounded-lg border py-2 pl-9 pr-3 text-sm outline-none focus:ring-2"
+          style={{ borderColor: "#e2e8f0" }}
+        />
       </div>
 
       {loading ? (
@@ -536,7 +215,7 @@ export default function ReturnsPage() {
           <Undo2 className="h-12 w-12 text-[#64748b]/40 mb-3" />
           <p className="text-[#64748b] font-medium">No returns found</p>
           <p className="text-sm text-[#64748b]/70 mt-1">
-            {statusFilter !== "ALL" ? `No ${statusFilter.toLowerCase()} returns` : "No return requests yet"}
+            {search ? "No returns match your search" : "No return requests yet"}
           </p>
         </div>
       ) : (
@@ -559,7 +238,7 @@ export default function ReturnsPage() {
                       onClick={() => openDetail(r.id)}
                       className="flex items-center gap-1.5 rounded-lg border border-[#e2e8f0] px-3 py-1.5 text-xs font-medium text-[#64748b] hover:bg-[#1E4D3D]/10 hover:text-[#1E4D3D] transition-colors"
                     >
-                      <Eye className="h-3.5 w-3.5" /> View & Action
+                      <Eye className="h-3.5 w-3.5" /> View
                     </button>
                   </div>
                 </div>
@@ -626,17 +305,7 @@ export default function ReturnsPage() {
         </>
       )}
 
-      <DetailModal
-        open={showDetailModal}
-        ret={loadingDetail ? null : detail}
-        onClose={() => setShowDetailModal(false)}
-        onApprove={() => { setShowDetailModal(false); setShowApproveModal(true); }}
-        onReject={() => { setShowDetailModal(false); setShowRejectModal(true); }}
-        onComplete={() => { setShowDetailModal(false); setShowCompleteModal(true); }}
-      />
-      <ApproveModal open={showApproveModal} ret={detail} onClose={() => setShowApproveModal(false)} onSuccess={fetchReturns} />
-      <RejectModal open={showRejectModal} ret={detail} onClose={() => setShowRejectModal(false)} onSuccess={fetchReturns} />
-      <CompleteModal open={showCompleteModal} ret={detail} onClose={() => setShowCompleteModal(false)} onSuccess={fetchReturns} />
+      <DetailModal open={showDetailModal} ret={loadingDetail ? null : detail} onClose={() => setShowDetailModal(false)} />
     </div>
   );
 }

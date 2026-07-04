@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import { generateOrderNumber } from "@/lib/utils";
+import { recalculateEmployeeCommission } from "@/lib/commission";
 import { z } from "zod";
 
 const orderItemSchema = z.object({
@@ -118,16 +119,14 @@ export async function POST(request: NextRequest) {
     },
   });
 
-  const commissionSetting = await prisma.commissionSetting.findFirst();
-  const employee = await prisma.employee.findUnique({ where: { id: employeeId } });
-  const commissionPct = employee?.commissionPercent || commissionSetting?.defaultPercentage || 10;
+  const { commissionRate } = await recalculateEmployeeCommission(employeeId);
 
   await prisma.commission.create({
     data: {
       employeeId,
       orderId: order.id,
-      amount: (totalAmount * commissionPct) / 100,
-      percentage: commissionPct,
+      amount: (totalAmount * commissionRate) / 100,
+      percentage: commissionRate,
     },
   });
 

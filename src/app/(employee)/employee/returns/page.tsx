@@ -1,5 +1,6 @@
 "use client";
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   ArrowLeft, Plus, Search, ChevronRight, Check, X, AlertCircle,
   Camera, Image as ImageIcon, CheckCircle, Minus, PackageX, Undo2,
@@ -9,7 +10,7 @@ import { compressImageToMaxSize } from "@/lib/compress-image";
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface Customer {
-  id: string; name: string; mobile: string; village?: string | null; district: string;
+  id: string; name: string; mobile: string; village?: string | null; district?: string;
 }
 
 interface CustomerOrder {
@@ -100,7 +101,18 @@ function Spinner({ className = "border-white" }: { className?: string }) {
 // ─── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function ReturnsPage() {
-  const [step, setStep] = useState<Step>("list");
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-gray-50" />}>
+      <ReturnsPageContent />
+    </Suspense>
+  );
+}
+
+function ReturnsPageContent() {
+  const searchParams = useSearchParams();
+  const prefillOrderId = searchParams.get("orderId");
+
+  const [step, setStep] = useState<Step>(prefillOrderId ? "items" : "list");
 
   const [myReturns, setMyReturns] = useState<MyReturn[]>([]);
   const [loadingReturns, setLoadingReturns] = useState(false);
@@ -143,6 +155,26 @@ export default function ReturnsPage() {
   }, []);
 
   useEffect(() => { if (step === "list") loadMyReturns(); }, [step, loadMyReturns]);
+
+  // Deep link from the Delivery screen — jump straight to item selection for this order.
+  useEffect(() => {
+    if (!prefillOrderId) return;
+    (async () => {
+      setLoadingOrderDetail(true);
+      try {
+        const res = await fetch(`/api/employee/returns/orders/${prefillOrderId}`);
+        if (res.ok) {
+          const detail: OrderDetail = await res.json();
+          setSelectedOrder(detail);
+          setSelectedCustomer(detail.customer);
+          setSelectedItems({});
+        }
+      } finally {
+        setLoadingOrderDetail(false);
+      }
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    })();
+  }, [prefillOrderId]);
 
   useEffect(() => {
     if (!customerQuery || step !== "customer") return;
@@ -402,7 +434,7 @@ export default function ReturnsPage() {
 
   if (step === "items") return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
-      <Header onBack={() => setStep("orders")} title="Select Products" />
+      <Header onBack={() => setStep(prefillOrderId ? "list" : "orders")} title="Select Products" />
       <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2">
         {loadingOrderDetail && <div className="flex justify-center pt-8"><Spinner className="border-green-500" /></div>}
         {!loadingOrderDetail && selectedOrder?.items.map((item) => {
@@ -631,7 +663,7 @@ export default function ReturnsPage() {
       <div className="px-4 pb-4">
         <button onClick={handleSubmit} disabled={submitting}
           className="w-full bg-green-600 text-white py-4 rounded-xl font-semibold shadow-sm active:bg-green-700 disabled:opacity-60 flex items-center justify-center gap-2">
-          {submitting ? <><Spinner /> Submitting...</> : <><CheckCircle size={18} /> Submit Return Request</>}
+          {submitting ? <><Spinner /> Completing...</> : <><CheckCircle size={18} /> Complete Return</>}
         </button>
       </div>
     </div>
@@ -646,8 +678,8 @@ export default function ReturnsPage() {
           <CheckCircle size={52} className="text-green-500" strokeWidth={1.5} />
         </div>
         <div className="text-center">
-          <h1 className="text-2xl font-bold text-gray-800">Return Submitted</h1>
-          <p className="text-gray-400 text-sm mt-1">Awaiting admin approval</p>
+          <h1 className="text-2xl font-bold text-gray-800">Return Completed</h1>
+          <p className="text-gray-400 text-sm mt-1">Inventory and records have been updated</p>
         </div>
         <div className="w-full bg-white rounded-2xl shadow-sm border border-gray-100 px-5 py-4">
           <div className="flex justify-between text-sm">

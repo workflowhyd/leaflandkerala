@@ -27,6 +27,7 @@ import {
   Wallet,
   Download,
   AlertCircle,
+  ExternalLink,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
@@ -133,7 +134,15 @@ interface Employee {
   address: string | null;
   territory: string | null;
   commissionPercent: number;
+  monthlySales: number;
+  weeklySales: number;
+  commissionRate: number;
+  commissionAmount: number;
   isActive: boolean;
+  governmentIdType: string | null;
+  governmentIdNumber: string | null;
+  governmentIdFrontUrl: string | null;
+  governmentIdBackUrl: string | null;
   documents: Document[];
   pincodes: PincodeAssignment[];
   customers: CustomerRow[];
@@ -158,6 +167,18 @@ const DOCUMENT_TYPE_OPTIONS = [
   { value: "DRIVING_LICENSE", label: "Driving License" },
   { value: "VOTER_ID", label: "Voter ID" },
 ];
+
+const ID_TYPE_LABEL: Record<string, string> = {
+  AADHAAR: "Aadhaar Card",
+  PAN: "PAN Card",
+  DRIVING_LICENSE: "Driving License",
+  VOTER_ID: "Voter ID",
+};
+
+// Small, cached thumbnail — the full-resolution image only loads when "View" is clicked.
+function cloudinaryThumb(url: string, width: number, height: number) {
+  return url.replace("/upload/", `/upload/w_${width},h_${height},c_fill,q_auto/`);
+}
 
 const DOCUMENT_LABELS: Record<string, string> = {
   AADHAAR: "Aadhaar Card",
@@ -276,9 +297,6 @@ export default function EmployeeProfilePage() {
     setSavingField(true);
     try {
       const body: Record<string, string | number> = { [field]: editValue };
-      if (field === "commissionPercent") {
-        body[field] = parseFloat(editValue);
-      }
       const res = await fetch(`/api/employees/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -582,44 +600,11 @@ export default function EmployeeProfilePage() {
               <div className="flex items-start gap-3">
                 <Briefcase className="h-4 w-4 mt-0.5 text-[#64748b]" />
                 <div className="flex-1">
-                  <p className="text-xs text-[#94a3b8] uppercase tracking-wide">Commission %</p>
-                  {editingField === "commissionPercent" ? (
-                    <div className="flex items-center gap-2 mt-1">
-                      <input
-                        type="range"
-                        min={5}
-                        max={15}
-                        step={0.5}
-                        value={editValue}
-                        onChange={(e) => setEditValue(e.target.value)}
-                        className="flex-1 accent-[#1E4D3D]"
-                      />
-                      <span className="text-sm font-medium text-[#1E4D3D] w-10">{editValue}%</span>
-                      <button
-                        onClick={() => handleSaveField("commissionPercent")}
-                        disabled={savingField}
-                        className="rounded p-1 text-[#1E4D3D] hover:bg-[#1E4D3D]/10 transition-colors"
-                      >
-                        <Save className="h-4 w-4" />
-                      </button>
-                      <button
-                        onClick={() => setEditingField(null)}
-                        className="rounded p-1 text-[#64748b] hover:bg-[#e2e8f0] transition-colors"
-                      >
-                        <X className="h-4 w-4" />
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-2">
-                      <p className="text-sm text-[#1a1a1a]">{employee.commissionPercent}%</p>
-                      <button
-                        onClick={() => handleStartEdit("commissionPercent", String(employee.commissionPercent))}
-                        className="rounded p-0.5 text-[#94a3b8] hover:text-[#1E4D3D] transition-colors"
-                      >
-                        <Edit className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  )}
+                  <p className="text-xs text-[#94a3b8] uppercase tracking-wide">Commission Rate</p>
+                  <p className="text-sm text-[#1a1a1a]">{employee.commissionRate}% (fixed, all employees)</p>
+                  <p className="text-xs text-[#94a3b8] mt-0.5">
+                    ₹{employee.monthlySales.toLocaleString("en-IN")} in monthly sales · ₹{employee.commissionAmount.toLocaleString("en-IN")} earned
+                  </p>
                 </div>
               </div>
             </CardContent>
@@ -656,6 +641,79 @@ export default function EmployeeProfilePage() {
               />
             </div>
           </div>
+
+          {/* Government Documents */}
+          <Card className="lg:col-span-2">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center gap-2">
+                  <FileText className="h-4 w-4 text-[#3B7A57]" />
+                  Government Documents
+                </CardTitle>
+                {employee.governmentIdFrontUrl && employee.governmentIdBackUrl && (
+                  <a
+                    href={`/api/employees/${employee.id}/id-card-pdf`}
+                    className="flex items-center gap-1.5 rounded-lg border border-[#e2e8f0] px-3 py-1.5 text-xs font-medium text-[#64748b] hover:bg-[#1E4D3D]/10 hover:text-[#1E4D3D] transition-colors"
+                  >
+                    <Download className="h-3.5 w-3.5" />
+                    Download PDF
+                  </a>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent>
+              {!employee.governmentIdFrontUrl && !employee.governmentIdBackUrl ? (
+                <p className="text-sm text-[#64748b]">No government ID on file for this employee.</p>
+              ) : (
+                <div className="flex flex-col gap-4">
+                  <div className="grid grid-cols-2 gap-4 max-w-md">
+                    <div>
+                      <p className="text-xs text-[#94a3b8] uppercase tracking-wide">ID Type</p>
+                      <p className="mt-0.5 text-sm text-[#1a1a1a]">
+                        {employee.governmentIdType ? ID_TYPE_LABEL[employee.governmentIdType] : "—"}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-[#94a3b8] uppercase tracking-wide">ID Number</p>
+                      <p className="mt-0.5 text-sm text-[#1a1a1a]">{employee.governmentIdNumber || "—"}</p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {[
+                      { label: "Front", url: employee.governmentIdFrontUrl },
+                      { label: "Back", url: employee.governmentIdBackUrl },
+                    ].map(({ label, url }) => (
+                      <div key={label} className="rounded-lg border border-[#e2e8f0] p-3">
+                        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[#94a3b8]">{label}</p>
+                        {url ? (
+                          <>
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={cloudinaryThumb(url, 320, 200)}
+                              alt={`Government ID ${label}`}
+                              loading="lazy"
+                              className="w-full rounded-md border border-[#e2e8f0] object-cover"
+                              style={{ aspectRatio: "16/10" }}
+                            />
+                            <a
+                              href={url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-[#3B7A57] hover:underline"
+                            >
+                              View {label} <ExternalLink className="h-3 w-3" />
+                            </a>
+                          </>
+                        ) : (
+                          <p className="text-sm text-[#94a3b8]">Not uploaded</p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
       )}
 
@@ -762,7 +820,7 @@ export default function EmployeeProfilePage() {
             <StatCard title="Customers" value={employee._count.customers} icon={Users} color="#1E4D3D" />
             <StatCard title="Orders" value={employee._count.orders} icon={ShoppingCart} color="#3B7A57" />
             <StatCard title="Field Visits" value={employee._count.fieldVisits} icon={MapPin} color="#F9A825" />
-            <StatCard title="Commission %" value={`${employee.commissionPercent}%`} icon={Percent} color="#7C3AED" />
+            <StatCard title="Commission Rate" value={`${employee.commissionRate}%`} icon={Percent} color="#7C3AED" />
           </div>
 
           <Card>

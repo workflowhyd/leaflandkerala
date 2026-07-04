@@ -123,12 +123,11 @@ function ApproveModal({ open, request, onClose, onSuccess }: {
   const { success, error: toastError } = useToast();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState(generatePassword());
-  const [commissionPercent, setCommissionPercent] = useState(10);
   const [copied, setCopied] = useState(false);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (open) { setEmail(""); setPassword(generatePassword()); setCommissionPercent(10); setCopied(false); }
+    if (open) { setEmail(""); setPassword(generatePassword()); setCopied(false); }
   }, [open]);
 
   async function handleApprove() {
@@ -139,7 +138,7 @@ function ApproveModal({ open, request, onClose, onSuccess }: {
       const res = await fetch(`/api/admin/registrations/${request.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "approve", email: email.trim(), password, commissionPercent }),
+        body: JSON.stringify({ action: "approve", email: email.trim(), password }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -174,12 +173,6 @@ function ApproveModal({ open, request, onClose, onSuccess }: {
                 {copied ? "Copied!" : "Copy"}
               </button>
             </div>
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1.5 text-[#374151]">Commission %</label>
-            <input type="number" min={0} max={100} step={0.5} value={commissionPercent}
-              onChange={(e) => setCommissionPercent(parseFloat(e.target.value) || 10)}
-              className="w-full rounded-lg border border-[#e2e8f0] px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#3B7A57]" />
           </div>
         </div>
       )}

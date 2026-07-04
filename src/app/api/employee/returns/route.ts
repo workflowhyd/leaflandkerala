@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { uploadImage } from "@/lib/cloudinary";
+import { recalculateEmployeeCommission } from "@/lib/commission";
+import { getStatusLabel } from "@/lib/utils";
 import type { Prisma } from "@prisma/client";
 
 const RETURN_REASONS = [
@@ -14,6 +16,9 @@ const RETURN_REASONS = [
   "PACKAGING_ISSUE",
   "OTHER",
 ] as const;
+
+// Products in these conditions aren't put back into sellable inventory.
+const NON_REUSABLE_REASONS = new Set(["DAMAGED_PRODUCT", "EXPIRED_PRODUCT"]);
 
 function generateReturnNumber(): string {
   const ymd = new Date().toISOString().slice(0, 10).replace(/-/g, "");
@@ -146,6 +151,7 @@ export async function POST(request: NextRequest) {
               orderId,
               customerId: order.customerId,
               employeeId: employee.id,
+              status: "COMPLETED",
               reason: reason as (typeof RETURN_REASONS)[number],
               reasonNotes: reasonNotes?.trim() || null,
               notes: notes?.trim() || null,
@@ -177,6 +183,31 @@ export async function POST(request: NextRequest) {
         }
       }
       if (!created) throw lastError;
+
+      // Update inventory immediately — no admin approval step in this workflow.
+      const shouldRestock = !NON_REUSABLE_REASONS.has(created.reason);
+      for (const item of created.items) {
+        if (shouldRestock) {
+          await tx.product.update({
+            where: { id: item.productId },
+            data: { stock: { increment: item.quantity } },
+          });
+        }
+        await tx.inventoryMovement.create({
+          data: {
+            productId: item.productId,
+            returnId: created.id,
+            quantity: shouldRestock ? item.quantity : 0,
+            reason: shouldRestock
+              ? `Return ${created.returnNumber} completed — restocked (${getStatusLabel(created.reason)})`
+              : `Return ${created.returnNumber} completed — not restocked (${getStatusLabel(created.reason)})`,
+          },
+        });
+      }
+
+      // A completed return reduces this period's sales, which can move the employee's commission tier.
+      await recalculateEmployeeCommission(employee.id, tx);
+
       return created;
     });
 
@@ -185,7 +216,7 @@ export async function POST(request: NextRequest) {
         userId: session.userId,
         customerId: order.customerId,
         type: "RETURN_CREATE",
-        description: `Return ${returnRecord.returnNumber} requested for order ${order.orderNumber} — ${returnRecord.items.length} item(s)`,
+        description: `Return ${returnRecord.returnNumber} completed for order ${order.orderNumber} — ${returnRecord.items.length} item(s)`,
         metadata: {
           returnId: returnRecord.id,
           returnNumber: returnRecord.returnNumber,

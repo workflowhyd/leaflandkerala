@@ -1,8 +1,9 @@
 "use client";
 import { useEffect, useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import {
   Truck, MapPin, Phone, Package, CheckCircle,
-  ChevronRight, RefreshCw, Navigation,
+  ChevronRight, RefreshCw, Navigation, Undo2,
 } from "lucide-react";
 
 interface OrderItem {
@@ -51,6 +52,7 @@ const NEXT_ACTION: Record<string, { label: string; color: string }> = {
 const ACTIVE_STATUSES = ["NEW", "CONFIRMED", "PROCESSING", "PACKED", "OUT_FOR_DELIVERY"];
 
 export default function DeliveryPage() {
+  const router = useRouter();
   const [orders, setOrders] = useState<DeliveryOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState<string | null>(null);
@@ -152,7 +154,7 @@ export default function DeliveryPage() {
         </div>
       ) : (
         <div className="px-4 py-4 space-y-6">
-          <Section title="Out for Delivery" icon={<Truck size={16} className="text-green-600" />} orders={grouped.outForDelivery} expandedId={expandedId} setExpandedId={setExpandedId} updating={updating} onUpdate={updateStatus} />
+          <Section title="Out for Delivery" icon={<Truck size={16} className="text-green-600" />} orders={grouped.outForDelivery} expandedId={expandedId} setExpandedId={setExpandedId} updating={updating} onUpdate={updateStatus} onReturnItems={(order) => router.push(`/employee/returns?orderId=${order.id}`)} />
           <Section title="Ready for Pickup" icon={<Package size={16} className="text-orange-500" />} orders={grouped.packed} expandedId={expandedId} setExpandedId={setExpandedId} updating={updating} onUpdate={updateStatus} />
           <Section title="Pending Orders" icon={<ChevronRight size={16} className="text-blue-500" />} orders={grouped.pending} expandedId={expandedId} setExpandedId={setExpandedId} updating={updating} onUpdate={updateStatus} />
         </div>
@@ -162,7 +164,7 @@ export default function DeliveryPage() {
 }
 
 function Section({
-  title, icon, orders, expandedId, setExpandedId, updating, onUpdate,
+  title, icon, orders, expandedId, setExpandedId, updating, onUpdate, onReturnItems,
 }: {
   title: string;
   icon: React.ReactNode;
@@ -171,6 +173,7 @@ function Section({
   setExpandedId: (id: string | null) => void;
   updating: string | null;
   onUpdate: (order: DeliveryOrder) => void;
+  onReturnItems?: (order: DeliveryOrder) => void;
 }) {
   if (orders.length === 0) return null;
   return (
@@ -189,6 +192,7 @@ function Section({
             onToggle={() => setExpandedId(expandedId === order.id ? null : order.id)}
             updating={updating === order.id}
             onUpdate={() => onUpdate(order)}
+            onReturnItems={onReturnItems ? () => onReturnItems(order) : undefined}
           />
         ))}
       </div>
@@ -197,13 +201,14 @@ function Section({
 }
 
 function OrderCard({
-  order, expanded, onToggle, updating, onUpdate,
+  order, expanded, onToggle, updating, onUpdate, onReturnItems,
 }: {
   order: DeliveryOrder;
   expanded: boolean;
   onToggle: () => void;
   updating: boolean;
   onUpdate: () => void;
+  onReturnItems?: () => void;
 }) {
   const action = NEXT_ACTION[order.status];
   const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(order.customer.address + " " + (order.customer.village ?? ""))}`;
@@ -259,18 +264,26 @@ function OrderCard({
             </a>
           </div>
 
-          {action && (
-            <button onClick={onUpdate} disabled={updating}
-              className={`w-full ${action.color} text-white py-3 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 disabled:opacity-60`}>
-              {updating ? (
-                <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Updating...</>
-              ) : order.status === "OUT_FOR_DELIVERY" ? (
-                <><CheckCircle size={16} /> {action.label}</>
-              ) : (
-                <><Truck size={16} /> {action.label}</>
-              )}
-            </button>
-          )}
+          <div className="flex gap-2">
+            {action && (
+              <button onClick={onUpdate} disabled={updating}
+                className={`flex-1 ${action.color} text-white py-3 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 disabled:opacity-60`}>
+                {updating ? (
+                  <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Updating...</>
+                ) : order.status === "OUT_FOR_DELIVERY" ? (
+                  <><CheckCircle size={16} /> {action.label}</>
+                ) : (
+                  <><Truck size={16} /> {action.label}</>
+                )}
+              </button>
+            )}
+            {onReturnItems && (
+              <button onClick={onReturnItems}
+                className="flex-1 border-2 border-orange-500 text-orange-600 py-3 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 active:bg-orange-50">
+                <Undo2 size={16} /> Return Items
+              </button>
+            )}
+          </div>
         </div>
       )}
     </div>

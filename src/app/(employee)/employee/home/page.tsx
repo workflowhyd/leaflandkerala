@@ -2,25 +2,20 @@
 import { useEffect, useState, useCallback } from "react";
 import {
   Package, IndianRupee, Clock, Truck, CheckCircle, Circle,
-  TrendingUp, ShoppingBag, Star, Zap,
+  ShoppingBag,
 } from "lucide-react";
 
 interface HomeData {
   name: string;
   weekOrders: number;
   pendingOrders: number;
-  estimatedCommission: number;
   totalEarnings: number;
-  commissionPercent: number;
   daysUntilDelivery: number;
   weekDays: { label: string; date: string; done: boolean; isToday: boolean }[];
   weeklySales: number;
-  weeklyOrdersDelivered: number;
-  weeklyCommission: number;
-  weeklyCommissionRate: number;
-  isEligibleForBonus: boolean;
-  bonusThreshold: number;
-  bonusRate: number;
+  monthlySales: number;
+  commissionRate: number;
+  commissionAmount: number;
   availableEarnings: number;
   lastPaymentDate: string | null;
   lastPaymentAmount: number | null;
@@ -167,10 +162,6 @@ export default function EmployeeHome() {
   }
 
   const showBanner = !bannerDismissed && offersData && (offersData.newRewards.length > 0 || offersData.offers.length > 0);
-  const isEligible = data?.isEligibleForBonus ?? false;
-  const salesProgress = data && data.bonusThreshold > 0
-    ? Math.min((data.weeklySales / data.bonusThreshold) * 100, 100)
-    : 0;
 
   return (
     <div className="bg-gray-50 min-h-screen">
@@ -197,7 +188,7 @@ export default function EmployeeHome() {
           <div className="text-right">
             <p className="text-green-300 text-xs">Total Earned</p>
             <p className="text-white text-lg font-bold">₹{Math.round(data?.totalEarnings ?? 0).toLocaleString("en-IN")}</p>
-            <p className="text-green-400 text-xs mt-0.5">{data?.commissionPercent}% base</p>
+            <p className="text-green-400 text-xs mt-0.5">{data?.commissionRate ?? 0}% current rate</p>
           </div>
         </div>
       </div>
@@ -213,29 +204,27 @@ export default function EmployeeHome() {
         />
       )}
 
-      {/* Commission bonus eligibility banner */}
+      {/* Commission Summary */}
       {data && (
-        <div className={`mx-4 mt-4 rounded-xl border p-4 shadow-sm ${isEligible ? "bg-amber-50 border-amber-200" : "bg-white border-gray-100"}`}>
-          <div className="flex items-center justify-between mb-2">
+        <div className="mx-4 mt-4 rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
+          <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
-              {isEligible ? <Star size={16} className="text-amber-500" /> : <Zap size={16} className="text-gray-400" />}
-              <p className={`text-sm font-semibold ${isEligible ? "text-amber-800" : "text-gray-700"}`}>
-                {isEligible ? `${data.bonusRate}% Commission Unlocked!` : "Weekly Commission Goal"}
-              </p>
+              <IndianRupee size={16} className="text-green-600" />
+              <p className="text-sm font-semibold text-gray-700">Commission Summary</p>
             </div>
-            <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${isEligible ? "bg-amber-200 text-amber-800" : "bg-gray-100 text-gray-500"}`}>
-              {isEligible ? "ELIGIBLE" : `${Math.round(salesProgress)}%`}
+            <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-700">
+              {data.commissionRate}% rate
             </span>
           </div>
-          <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-            <div
-              className={`h-full rounded-full transition-all ${isEligible ? "bg-amber-400" : "bg-green-500"}`}
-              style={{ width: `${salesProgress}%` }}
-            />
-          </div>
-          <div className="flex justify-between mt-1.5 text-xs text-gray-400">
-            <span>₹{Math.round(data.weeklySales).toLocaleString("en-IN")} delivered</span>
-            <span>Target: ₹{Math.round(data.bonusThreshold).toLocaleString("en-IN")}</span>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <p className="text-xs text-gray-400">Current Sales</p>
+              <p className="text-lg font-bold text-gray-800">₹{Math.round(data.monthlySales).toLocaleString("en-IN")}</p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-400">Commission Earned</p>
+              <p className="text-lg font-bold text-green-700">₹{Math.round(data.commissionAmount).toLocaleString("en-IN")}</p>
+            </div>
           </div>
         </div>
       )}
@@ -251,20 +240,18 @@ export default function EmployeeHome() {
             <p className="text-2xl font-bold text-gray-800">
               ₹{Math.round(data?.weeklySales ?? 0).toLocaleString("en-IN")}
             </p>
-            <p className="text-xs text-gray-400 mt-1">{data?.weeklyOrdersDelivered ?? 0} delivered</p>
+            <p className="text-xs text-gray-400 mt-1">{data?.weekOrders ?? 0} orders</p>
           </div>
 
-          <div className={`rounded-xl p-4 shadow-sm border ${isEligible ? "bg-amber-50 border-amber-200" : "bg-white border-gray-100"}`}>
+          <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
             <div className="flex items-center gap-2 mb-2">
-              <IndianRupee size={18} className={isEligible ? "text-amber-500" : "text-green-600"} />
-              <span className="text-xs text-gray-500 font-medium">Commission</span>
+              <IndianRupee size={18} className="text-green-600" />
+              <span className="text-xs text-gray-500 font-medium">Monthly Sales</span>
             </div>
-            <p className={`text-2xl font-bold ${isEligible ? "text-amber-700" : "text-gray-800"}`}>
-              ₹{Math.round(data?.weeklyCommission ?? 0).toLocaleString("en-IN")}
+            <p className="text-2xl font-bold text-gray-800">
+              ₹{Math.round(data?.monthlySales ?? 0).toLocaleString("en-IN")}
             </p>
-            <p className={`text-xs mt-1 ${isEligible ? "text-amber-600 font-semibold" : "text-gray-400"}`}>
-              {data?.weeklyCommissionRate ?? 0}% rate{isEligible ? " ⭐" : ""}
-            </p>
+            <p className="text-xs text-gray-400 mt-1">{data?.commissionRate ?? 0}% commission rate</p>
           </div>
 
           <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">

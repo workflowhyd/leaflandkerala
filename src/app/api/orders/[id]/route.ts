@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
+import { recalculateEmployeeCommission } from "@/lib/commission";
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await getSession();
@@ -34,10 +35,11 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
   }
 
   const { id } = await params;
-  await prisma.order.update({ where: { id }, data: { status: "CANCELLED" } });
+  const order = await prisma.order.update({ where: { id }, data: { status: "CANCELLED" } });
   await prisma.orderTracking.create({
     data: { orderId: id, status: "CANCELLED", notes: "Order cancelled by admin" },
   });
+  await recalculateEmployeeCommission(order.employeeId);
 
   return NextResponse.json({ success: true });
 }

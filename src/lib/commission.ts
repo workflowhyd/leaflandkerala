@@ -1,51 +1,85 @@
 import { prisma } from "@/lib/prisma";
+import type { Prisma, PrismaClient } from "@prisma/client";
 
-export interface WeeklyCommissionResult {
-  weeklySales: number;
-  weeklyOrdersDelivered: number;
-  commissionRate: number;
-  weeklyCommission: number;
-  isEligible: boolean;
-  threshold: number;
-  bonusRate: number;
+// Every employee earns a fixed commission rate — not admin-configurable.
+export const FIXED_COMMISSION_RATE = 30;
+
+export function getCommissionRate(_monthlySales: number): number {
+  return FIXED_COMMISSION_RATE;
 }
 
-export async function getWeeklyCommission(
-  employeeId: string,
-  weekStart: Date,
-  weekEnd: Date
-): Promise<WeeklyCommissionResult> {
-  const [deliveredOrders, settings, employee] = await Promise.all([
-    prisma.order.findMany({
-      where: {
-        employeeId,
-        status: "DELIVERED",
-        updatedAt: { gte: weekStart, lte: weekEnd },
-      },
-      select: { id: true, totalAmount: true },
+export function getWeekRange(date: Date = new Date()) {
+  const day = date.getDay();
+  const diffToMon = day === 0 ? -6 : 1 - day;
+  const weekStart = new Date(date);
+  weekStart.setDate(date.getDate() + diffToMon);
+  weekStart.setHours(0, 0, 0, 0);
+  const weekEnd = new Date(weekStart);
+  weekEnd.setDate(weekStart.getDate() + 6);
+  weekEnd.setHours(23, 59, 59, 999);
+  return { weekStart, weekEnd };
+}
+
+export function getMonthRange(date: Date = new Date()) {
+  const monthStart = new Date(date.getFullYear(), date.getMonth(), 1, 0, 0, 0, 0);
+  const monthEnd = new Date(date.getFullYear(), date.getMonth() + 1, 0, 23, 59, 59, 999);
+  return { monthStart, monthEnd };
+}
+
+type DbClient = PrismaClient | Prisma.TransactionClient;
+
+/**
+ * Recomputes an employee's current week/month sales (orders minus returns)
+ * and the resulting fixed-tier commission rate/amount, then persists it.
+ * Call this after any event that changes an employee's sales: order
+ * create/cancel, or a completed return.
+ */
+export async function recalculateEmployeeCommission(employeeId: string, client: DbClient = prisma) {
+  const now = new Date();
+  const { weekStart, weekEnd } = getWeekRange(now);
+  const { monthStart, monthEnd } = getMonthRange(now);
+
+  const [monthOrders, weekOrders, monthReturnItems, weekReturnItems] = await Promise.all([
+    client.order.aggregate({
+      where: { employeeId, status: { not: "CANCELLED" }, createdAt: { gte: monthStart, lte: monthEnd } },
+      _sum: { totalAmount: true },
     }),
-    prisma.commissionSetting.findFirst(),
-    prisma.employee.findUnique({ where: { id: employeeId }, select: { commissionPercent: true } }),
+    client.order.aggregate({
+      where: { employeeId, status: { not: "CANCELLED" }, createdAt: { gte: weekStart, lte: weekEnd } },
+      _sum: { totalAmount: true },
+    }),
+    client.returnItem.findMany({
+      where: { return: { employeeId, createdAt: { gte: monthStart, lte: monthEnd } } },
+      select: { quantity: true, orderItem: { select: { price: true } } },
+    }),
+    client.returnItem.findMany({
+      where: { return: { employeeId, createdAt: { gte: weekStart, lte: weekEnd } } },
+      select: { quantity: true, orderItem: { select: { price: true } } },
+    }),
   ]);
 
-  const weeklySales = deliveredOrders.reduce((s, o) => s + o.totalAmount, 0);
-  const threshold = settings?.weeklyBonusThreshold ?? 50000;
-  const bonusRate = settings?.weeklyBonusRate ?? 35;
-  const defaultRate = employee?.commissionPercent ?? settings?.defaultPercentage ?? 10;
+  const monthReturnsTotal = monthReturnItems.reduce((s, i) => s + i.quantity * i.orderItem.price, 0);
+  const weekReturnsTotal = weekReturnItems.reduce((s, i) => s + i.quantity * i.orderItem.price, 0);
 
-  const isEligible = weeklySales >= threshold;
-  const commissionRate = isEligible ? bonusRate : defaultRate;
-  const weeklyCommission = (weeklySales * commissionRate) / 100;
+  const monthlySales = Math.max(0, (monthOrders._sum.totalAmount ?? 0) - monthReturnsTotal);
+  const weeklySales = Math.max(0, (weekOrders._sum.totalAmount ?? 0) - weekReturnsTotal);
 
-  return {
-    weeklySales,
-    weeklyOrdersDelivered: deliveredOrders.length,
-    commissionRate,
-    weeklyCommission,
-    isEligible,
-    threshold,
-    bonusRate,
-  };
+  const commissionRate = getCommissionRate(monthlySales);
+  const commissionAmount = (monthlySales * commissionRate) / 100;
+
+  await client.employee.update({
+    where: { id: employeeId },
+    data: {
+      monthlySales,
+      weeklySales,
+      commissionRate,
+      commissionAmount,
+      commissionPercent: commissionRate,
+      lastCommissionCalculation: now,
+    },
+  });
+
+  return { monthlySales, weeklySales, commissionRate, commissionAmount };
 }
 
 export async function getFreeGiftSettings() {

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { performDeliveryCleanup } from "@/lib/delivery-cleanup";
 
 // Allowed transitions the employee can make
 const ALLOWED: Record<string, string> = {
@@ -75,6 +76,11 @@ export async function PATCH(
       });
     }
   });
+
+  if (nextStatus === "DELIVERED") {
+    // Privacy: house photo + GPS were only needed to complete this delivery.
+    await performDeliveryCleanup(id, session.userId);
+  }
 
   return NextResponse.json({ success: true, status: nextStatus });
 }

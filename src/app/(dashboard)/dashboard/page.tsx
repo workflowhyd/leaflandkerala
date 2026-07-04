@@ -1,8 +1,9 @@
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { RecentOrdersTable } from "@/components/dashboard/recent-orders-table";
 import { TopEmployees } from "@/components/dashboard/top-employees";
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import {
-  ShoppingCart, Truck, Users, TrendingUp, CalendarCheck, UserPlus, Clock, Wallet,
+  ShoppingCart, Truck, Users, TrendingUp, CalendarCheck, UserPlus, Clock, Wallet, Percent,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { prisma } from "@/lib/prisma";
@@ -120,6 +121,13 @@ async function getDashboardData() {
       ]),
     ]);
 
+    const commissionSummary = await prisma.employee.findMany({
+      where: { isActive: true },
+      select: { id: true, name: true, weeklySales: true, monthlySales: true, commissionRate: true, commissionAmount: true },
+      orderBy: { monthlySales: "desc" },
+      take: 10,
+    });
+
     const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
     const dailyMap = new Map<string, number>();
     for (const row of weeklyOrdersByDay) {
@@ -157,6 +165,7 @@ async function getDashboardData() {
       payoutPendingTotal: pendingPayoutTotal._sum.amount ?? 0,
       paymentsThisWeek,
       totalCommissionPaid: totalCommissionPaid._sum.amount ?? 0,
+      commissionSummary,
     };
   } catch {
     return null;
@@ -172,6 +181,7 @@ export default async function DashboardPage() {
   const upcomingSunday: Date | undefined = data?.upcomingSunday;
   const pendingRegistrations = data?.pendingRegistrations ?? [];
   const chartData = data?.chartData ?? [];
+  const commissionSummary = data?.commissionSummary ?? [];
 
   const sundayLabel = upcomingSunday
     ? new Date(upcomingSunday).toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long" })
@@ -367,6 +377,47 @@ export default async function DashboardPage() {
                 </div>
               ))}
             </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Employee Commission Summary — read-only, auto-calculated */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <Percent className="h-5 w-5 text-[#1E4D3D]" />
+            <div>
+              <CardTitle>Employee Commission Summary</CardTitle>
+              <p className="mt-0.5 text-sm text-[#64748b]">Auto-calculated — view only</p>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="px-0 pb-2">
+          {commissionSummary.length === 0 ? (
+            <p className="px-6 py-4 text-sm text-[#64748b]">No active employees.</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Employee</TableHead>
+                  <TableHead className="text-right">Weekly Sales</TableHead>
+                  <TableHead className="text-right">Monthly Sales</TableHead>
+                  <TableHead className="text-right">Rate</TableHead>
+                  <TableHead className="text-right">Commission Earned</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {commissionSummary.map((emp) => (
+                  <TableRow key={emp.id}>
+                    <TableCell className="font-medium">{emp.name}</TableCell>
+                    <TableCell className="text-right">{formatCurrency(emp.weeklySales)}</TableCell>
+                    <TableCell className="text-right">{formatCurrency(emp.monthlySales)}</TableCell>
+                    <TableCell className="text-right">{emp.commissionRate}%</TableCell>
+                    <TableCell className="text-right font-semibold text-[#1E4D3D]">{formatCurrency(emp.commissionAmount)}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           )}
         </CardContent>
       </Card>

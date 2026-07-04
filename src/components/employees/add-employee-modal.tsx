@@ -1,13 +1,13 @@
 "use client";
 
-import { useState } from "react";
-import Image from "next/image";
+import { useState, useRef } from "react";
 import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select } from "@/components/ui/select";
-import { Upload, X } from "lucide-react";
+import { Camera, Image as ImageIcon, X } from "lucide-react";
+import { compressImageToMaxSize } from "@/lib/compress-image";
 
 interface AddEmployeeModalProps {
   open: boolean;
@@ -22,56 +22,109 @@ const DOCUMENT_TYPE_OPTIONS = [
   { value: "VOTER_ID", label: "Voter ID" },
 ];
 
-interface DocumentEntry {
-  type: string;
-  file: File | null;
+const STATUS_OPTIONS = [
+  { value: "true", label: "Active" },
+  { value: "false", label: "Inactive" },
+];
+
+function IdPhotoCapture({
+  label, preview, onCapture, onClear, error,
+}: {
+  label: string;
   preview: string;
+  onCapture: (file: File) => void;
+  onClear: () => void;
+  error?: string;
+}) {
+  const cameraRef = useRef<HTMLInputElement>(null);
+  const galleryRef = useRef<HTMLInputElement>(null);
+
+  function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (file) onCapture(file);
+  }
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <label className="text-sm font-medium text-[#1a1a1a]">{label} *</label>
+      {preview ? (
+        <div className="relative inline-block">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={preview} alt={label} className="h-32 w-auto rounded-lg border border-[#e2e8f0] object-contain" />
+          <button
+            type="button"
+            onClick={onClear}
+            className="absolute -top-2 -right-2 flex h-5 w-5 items-center justify-center rounded-full bg-[#D32F2F] text-white hover:bg-[#B71C1C] transition-colors"
+          >
+            <X className="h-3 w-3" />
+          </button>
+        </div>
+      ) : (
+        <div className="flex gap-2">
+          <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleFile} />
+          <input ref={galleryRef} type="file" accept="image/*" className="hidden" onChange={handleFile} />
+          <button
+            type="button"
+            onClick={() => cameraRef.current?.click()}
+            className="flex-1 flex flex-col items-center justify-center gap-1.5 rounded-lg border-2 border-dashed border-[#e2e8f0] py-5 hover:border-[#3B7A57] hover:bg-[#1E4D3D]/5 transition-colors"
+          >
+            <Camera className="h-5 w-5 text-[#64748b]" />
+            <span className="text-xs text-[#64748b]">Camera</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => galleryRef.current?.click()}
+            className="flex-1 flex flex-col items-center justify-center gap-1.5 rounded-lg border-2 border-dashed border-[#e2e8f0] py-5 hover:border-[#3B7A57] hover:bg-[#1E4D3D]/5 transition-colors"
+          >
+            <ImageIcon className="h-5 w-5 text-[#64748b]" />
+            <span className="text-xs text-[#64748b]">Gallery</span>
+          </button>
+        </div>
+      )}
+      {error && <p className="text-xs text-[#D32F2F]">{error}</p>}
+    </div>
+  );
 }
+
+const INITIAL_FORM = {
+  name: "",
+  email: "",
+  mobile: "",
+  password: "",
+  address: "",
+  territory: "",
+  governmentIdType: "AADHAAR",
+  governmentIdNumber: "",
+  isActive: "true",
+};
 
 export function AddEmployeeModal({ open, onClose, onSuccess }: AddEmployeeModalProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [form, setForm] = useState({
-    name: "",
-    email: "",
-    mobile: "",
-    password: "",
-    address: "",
-    commissionPercent: 10,
-    territory: "",
-  });
+  const [form, setForm] = useState(INITIAL_FORM);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
-  const [document, setDocument] = useState<DocumentEntry>({
-    type: "AADHAAR",
-    file: null,
-    preview: "",
-  });
+  const [frontPreview, setFrontPreview] = useState("");
+  const [backPreview, setBackPreview] = useState("");
 
-  const handleChange = (field: string, value: string | number) => {
+  const handleChange = (field: string, value: string) => {
     setForm((prev) => ({ ...prev, [field]: value }));
     if (fieldErrors[field]) {
       setFieldErrors((prev) => ({ ...prev, [field]: "" }));
     }
   };
 
-  const handleDocumentFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      setDocument((prev) => ({
-        ...prev,
-        file,
-        preview: reader.result as string,
-      }));
-    };
-    reader.readAsDataURL(file);
-    e.target.value = "";
-  };
+  async function handleFrontCapture(file: File) {
+    const compressed = await compressImageToMaxSize(file, 300_000);
+    setFrontPreview(compressed);
+    setFieldErrors((prev) => ({ ...prev, front: "" }));
+  }
 
-  const clearDocument = () => {
-    setDocument((prev) => ({ ...prev, file: null, preview: "" }));
-  };
+  async function handleBackCapture(file: File) {
+    const compressed = await compressImageToMaxSize(file, 300_000);
+    setBackPreview(compressed);
+    setFieldErrors((prev) => ({ ...prev, back: "" }));
+  }
 
   const validate = () => {
     const errors: Record<string, string> = {};
@@ -79,7 +132,10 @@ export function AddEmployeeModal({ open, onClose, onSuccess }: AddEmployeeModalP
     if (!form.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) errors.email = "Enter a valid email";
     if (!form.mobile || form.mobile.length < 10) errors.mobile = "Enter a valid mobile number";
     if (!form.password || form.password.length < 8) errors.password = "Password must be at least 8 characters";
-    if (form.commissionPercent < 5 || form.commissionPercent > 15) errors.commissionPercent = "Commission must be between 5% and 15%";
+    if (!form.address.trim()) errors.address = "Address is required";
+    if (!form.governmentIdNumber.trim()) errors.governmentIdNumber = "Government ID number is required";
+    if (!frontPreview) errors.front = "Front image is required";
+    if (!backPreview) errors.back = "Back image is required";
     return errors;
   };
 
@@ -93,27 +149,40 @@ export function AddEmployeeModal({ open, onClose, onSuccess }: AddEmployeeModalP
 
     setLoading(true);
     try {
-      // Upload document image first if provided
-      let documentUrl = "";
-      if (document.file && document.preview) {
-        const uploadRes = await fetch("/api/upload", {
+      const [frontUploadRes, backUploadRes] = await Promise.all([
+        fetch("/api/upload", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ imageData: document.preview, folder: "employees" }),
-        });
-        if (uploadRes.ok) {
-          const uploadData = await uploadRes.json();
-          documentUrl = uploadData.url || "";
-        }
+          body: JSON.stringify({ imageData: frontPreview, folder: "employees" }),
+        }),
+        fetch("/api/upload", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ imageData: backPreview, folder: "employees" }),
+        }),
+      ]);
+
+      if (!frontUploadRes.ok || !backUploadRes.ok) {
+        setError("Failed to upload government ID images. Please try again.");
+        return;
       }
 
+      const [frontUpload, backUpload] = await Promise.all([frontUploadRes.json(), backUploadRes.json()]);
+
       const payload = {
-        ...form,
-        address: form.address || undefined,
+        name: form.name,
+        email: form.email,
+        mobile: form.mobile,
+        password: form.password,
+        address: form.address,
         territory: form.territory || undefined,
-        document: document.file
-          ? { type: document.type, imageUrl: documentUrl }
-          : undefined,
+        isActive: form.isActive === "true",
+        governmentIdType: form.governmentIdType,
+        governmentIdNumber: form.governmentIdNumber,
+        governmentIdFrontUrl: frontUpload.url,
+        governmentIdFrontPublicId: frontUpload.publicId,
+        governmentIdBackUrl: backUpload.url,
+        governmentIdBackPublicId: backUpload.publicId,
       };
 
       const res = await fetch("/api/employees", {
@@ -138,18 +207,11 @@ export function AddEmployeeModal({ open, onClose, onSuccess }: AddEmployeeModalP
   };
 
   const handleClose = () => {
-    setForm({
-      name: "",
-      email: "",
-      mobile: "",
-      password: "",
-      address: "",
-      commissionPercent: 10,
-      territory: "",
-    });
+    setForm(INITIAL_FORM);
     setFieldErrors({});
     setError("");
-    setDocument({ type: "AADHAAR", file: null, preview: "" });
+    setFrontPreview("");
+    setBackPreview("");
     onClose();
   };
 
@@ -186,23 +248,24 @@ export function AddEmployeeModal({ open, onClose, onSuccess }: AddEmployeeModalP
             error={fieldErrors.name}
           />
           <Input
+            label="Mobile Number *"
+            placeholder="10-digit mobile number"
+            value={form.mobile}
+            onChange={(e) => handleChange("mobile", e.target.value)}
+            error={fieldErrors.mobile}
+            maxLength={15}
+          />
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Input
             label="Email *"
             type="email"
             placeholder="employee@example.com"
             value={form.email}
             onChange={(e) => handleChange("email", e.target.value)}
             error={fieldErrors.email}
-          />
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Input
-            label="Mobile *"
-            placeholder="10-digit mobile number"
-            value={form.mobile}
-            onChange={(e) => handleChange("mobile", e.target.value)}
-            error={fieldErrors.mobile}
-            maxLength={15}
+            helperText="Used as the employee's login"
           />
           <Input
             label="Password *"
@@ -215,10 +278,11 @@ export function AddEmployeeModal({ open, onClose, onSuccess }: AddEmployeeModalP
         </div>
 
         <Textarea
-          label="Address"
-          placeholder="Full address (optional)"
+          label="Address *"
+          placeholder="Full address"
           value={form.address}
           onChange={(e) => handleChange("address", e.target.value)}
+          error={fieldErrors.address}
           rows={2}
         />
 
@@ -229,71 +293,52 @@ export function AddEmployeeModal({ open, onClose, onSuccess }: AddEmployeeModalP
             value={form.territory}
             onChange={(e) => handleChange("territory", e.target.value)}
           />
-          <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-[#1a1a1a]">
-              Commission % ({form.commissionPercent}%)
-            </label>
-            <input
-              type="range"
-              min={5}
-              max={15}
-              step={0.5}
-              value={form.commissionPercent}
-              onChange={(e) => handleChange("commissionPercent", parseFloat(e.target.value))}
-              className="w-full accent-[#1E4D3D]"
-            />
-            <div className="flex justify-between text-xs text-[#64748b]">
-              <span>5%</span>
-              <span className="font-medium text-[#1E4D3D]">{form.commissionPercent}%</span>
-              <span>15%</span>
-            </div>
-            {fieldErrors.commissionPercent && (
-              <p className="text-xs text-[#D32F2F]">{fieldErrors.commissionPercent}</p>
-            )}
-          </div>
+          <Select
+            label="Status"
+            options={STATUS_OPTIONS}
+            value={form.isActive}
+            onChange={(e) => handleChange("isActive", e.target.value)}
+          />
         </div>
+        <p className="text-xs text-[#94a3b8] -mt-2">
+          Commission is fixed at 30% for every employee and calculated automatically — not editable here.
+        </p>
 
-        {/* Document Upload */}
+        {/* Government ID */}
         <div className="rounded-lg border border-[#e2e8f0] p-4">
-          <h3 className="mb-3 text-sm font-semibold text-[#1a1a1a]">Document Upload (Optional)</h3>
+          <h3 className="mb-3 text-sm font-semibold text-[#1a1a1a]">Government ID</h3>
           <div className="flex flex-col gap-3">
-            <Select
-              label="Document Type"
-              options={DOCUMENT_TYPE_OPTIONS}
-              value={document.type}
-              onChange={(e) => setDocument((prev) => ({ ...prev, type: e.target.value }))}
-            />
-            {document.preview ? (
-              <div className="relative inline-block">
-                <Image
-                  src={document.preview}
-                  alt="Document preview"
-                  width={128}
-                  height={128}
-                  className="h-32 w-auto rounded-lg border border-[#e2e8f0] object-contain"
-                />
-                <button
-                  onClick={clearDocument}
-                  className="absolute -top-2 -right-2 flex h-5 w-5 items-center justify-center rounded-full bg-[#D32F2F] text-white hover:bg-[#B71C1C] transition-colors"
-                >
-                  <X className="h-3 w-3" />
-                </button>
-              </div>
-            ) : (
-              <label className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-[#e2e8f0] py-6 hover:border-[#3B7A57] hover:bg-[#1E4D3D]/5 transition-colors">
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={handleDocumentFile}
-                />
-                <Upload className="h-6 w-6 text-[#64748b]" />
-                <div className="text-center">
-                  <p className="text-sm text-[#64748b]">Click to upload document image</p>
-                  <p className="text-xs text-[#94a3b8]">JPG, PNG up to 5MB</p>
-                </div>
-              </label>
-            )}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Select
+                label="Government ID Type *"
+                options={DOCUMENT_TYPE_OPTIONS}
+                value={form.governmentIdType}
+                onChange={(e) => handleChange("governmentIdType", e.target.value)}
+              />
+              <Input
+                label="Government ID Number *"
+                placeholder="ID number"
+                value={form.governmentIdNumber}
+                onChange={(e) => handleChange("governmentIdNumber", e.target.value)}
+                error={fieldErrors.governmentIdNumber}
+              />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <IdPhotoCapture
+                label="Government ID — Front"
+                preview={frontPreview}
+                onCapture={handleFrontCapture}
+                onClear={() => setFrontPreview("")}
+                error={fieldErrors.front}
+              />
+              <IdPhotoCapture
+                label="Government ID — Back"
+                preview={backPreview}
+                onCapture={handleBackCapture}
+                onClear={() => setBackPreview("")}
+                error={fieldErrors.back}
+              />
+            </div>
           </div>
         </div>
       </div>

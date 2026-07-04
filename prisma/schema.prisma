@@ -75,6 +75,7 @@ enum ActivityType {
   PRODUCT_UPDATE
   RETURN_CREATE
   RETURN_STATUS_CHANGE
+  DELIVERY_CLEANUP
 }
 
 enum OfferType {
@@ -132,14 +133,29 @@ model Employee {
   id                String   @id @default(cuid())
   userId            String   @unique
   name              String
-  mobile            String
+  mobile            String   @unique
   email             String
   address           String?
-  commissionPercent Float    @default(10.0)
+  commissionPercent Float    @default(0)
   territory         String?
   isActive          Boolean  @default(true)
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
+
+  // Auto-calculated fixed-tier commission fields (recomputed on order create/cancel/return)
+  monthlySales               Float     @default(0)
+  weeklySales                Float     @default(0)
+  commissionRate             Float     @default(0)
+  commissionAmount           Float     @default(0)
+  lastCommissionCalculation  DateTime?
+
+  // Government ID captured at employee creation (front/back images)
+  governmentIdType          DocumentType?
+  governmentIdNumber        String?
+  governmentIdFrontUrl      String?
+  governmentIdFrontPublicId String?
+  governmentIdBackUrl       String?
+  governmentIdBackPublicId  String?
 
   user              User               @relation(fields: [userId], references: [id], onDelete: Cascade)
   documents         EmployeeDocument[]
@@ -152,6 +168,8 @@ model Employee {
   rewards           EmployeeReward[]
   payments          EmployeePayment[]
   returns           Return[]
+
+  @@index([governmentIdNumber])
 }
 
 model EmployeeDocument {
@@ -228,12 +246,16 @@ model Customer {
 model CustomerPhoto {
   id         String   @id @default(cuid())
   customerId String
+  orderId    String?
   imageUrl   String
   publicId   String?
   isFront    Boolean  @default(false)
   createdAt  DateTime @default(now())
 
   customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  order    Order?   @relation(fields: [orderId], references: [id], onDelete: SetNull)
+
+  @@index([orderId])
 }
 
 model CustomerLocation {
@@ -307,6 +329,7 @@ model Order {
   notifications Notification[]
   commissions   Commission[]
   returns       Return[]
+  housePhotos   CustomerPhoto[]
 
   @@index([employeeId])
   @@index([customerId])

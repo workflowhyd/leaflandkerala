@@ -10,7 +10,7 @@ import {
   Edit,
   UserX,
   UserCheck2,
-  Trash2,
+  Download,
   ChevronLeft,
   ChevronRight,
   CheckCircle,
@@ -18,7 +18,6 @@ import {
   Phone,
   MapPin,
   Percent,
-  AlertTriangle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -97,49 +96,6 @@ function ToggleConfirmModal({
   );
 }
 
-function DeleteConfirmModal({
-  open,
-  employee,
-  loading,
-  onConfirm,
-  onCancel,
-}: {
-  open: boolean;
-  employee: Employee | null;
-  loading: boolean;
-  onConfirm: () => void;
-  onCancel: () => void;
-}) {
-  if (!open || !employee) return null;
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onCancel} />
-      <div className="relative z-10 w-full max-w-sm rounded-xl bg-white p-6 shadow-2xl">
-        <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-red-100">
-          <AlertTriangle className="h-6 w-6 text-red-600" />
-        </div>
-        <h3 className="mb-2 text-lg font-semibold text-[#1a1a1a]">Remove Employee</h3>
-        <p className="mb-1 text-sm font-medium text-[#1a1a1a]">{employee.name}</p>
-        <p className="mb-2 text-sm text-[#64748b]">
-          Are you sure you want to remove this employee? This action cannot be undone.
-        </p>
-        <p className="mb-6 text-xs text-[#94a3b8] bg-[#f8fafc] rounded-lg p-3 border border-[#e2e8f0]">
-          The employee&apos;s order history, earnings, and delivery records will be preserved for reporting purposes.
-          They will immediately lose access to the system.
-        </p>
-        <div className="flex gap-3">
-          <Button variant="outline" className="flex-1" onClick={onCancel} disabled={loading}>
-            Cancel
-          </Button>
-          <Button variant="danger" className="flex-1" onClick={onConfirm} loading={loading}>
-            Remove Employee
-          </Button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 const STATUS_TABS: { label: string; value: StatusFilter; color: string }[] = [
   { label: "All",      value: "all",      color: "text-[#1a1a1a]" },
   { label: "Active",   value: "active",   color: "text-green-700" },
@@ -157,9 +113,7 @@ export default function EmployeesPage() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("active");
   const [showAddModal, setShowAddModal] = useState(false);
   const [toggleEmployee, setToggleEmployee] = useState<Employee | null>(null);
-  const [deleteEmployee, setDeleteEmployee] = useState<Employee | null>(null);
   const [toggleLoading, setToggleLoading] = useState(false);
-  const [deleteLoading, setDeleteLoading] = useState(false);
   const limit = 20;
 
   const fetchEmployees = useCallback(async () => {
@@ -210,27 +164,6 @@ export default function EmployeesPage() {
     }
   };
 
-  const handleDelete = async () => {
-    if (!deleteEmployee) return;
-    setDeleteLoading(true);
-    try {
-      const res = await fetch(`/api/employees/${deleteEmployee.id}`, { method: "DELETE" });
-      if (res.ok) {
-        success("Employee removed", `${deleteEmployee.name} has been removed from the system`);
-        setDeleteEmployee(null);
-        setStatusFilter("active");
-        setPage(1);
-      } else {
-        const data = await res.json().catch(() => ({}));
-        toastError(data.error || "Failed to remove employee");
-      }
-    } catch {
-      toastError("Failed to remove employee");
-    } finally {
-      setDeleteLoading(false);
-    }
-  };
-
   const totalPages = Math.ceil(total / limit);
 
   const StatusBadge = ({ isActive }: { isActive: boolean }) =>
@@ -264,7 +197,7 @@ export default function EmployeesPage() {
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#64748b]" />
           <input
             type="text"
-            placeholder="Search by name, email, mobile..."
+            placeholder="Search by name, mobile, or government ID number..."
             value={search}
             onChange={(e) => { setSearch(e.target.value); setPage(1); }}
             className="w-full rounded-md border border-[#e2e8f0] bg-white pl-10 pr-3 py-2 text-sm text-[#1a1a1a] placeholder:text-[#64748b] focus:outline-none focus:ring-2 focus:ring-[#3B7A57] focus:border-transparent hover:border-[#3B7A57] transition-colors"
@@ -368,13 +301,13 @@ export default function EmployeesPage() {
                     {emp.isActive ? <UserX className="h-3.5 w-3.5" /> : <UserCheck2 className="h-3.5 w-3.5" />}
                     {emp.isActive ? "Disable" : "Enable"}
                   </button>
-                  <button
-                    onClick={() => setDeleteEmployee(emp)}
-                    className="flex items-center gap-1 rounded-lg border border-[#e2e8f0] px-2.5 py-1.5 text-xs font-medium text-[#64748b] hover:bg-red-50 hover:text-red-600 transition-colors"
+                  <a
+                    href={`/api/employees/${emp.id}/id-card-pdf`}
+                    className="flex items-center gap-1 rounded-lg border border-[#e2e8f0] px-2.5 py-1.5 text-xs font-medium text-[#64748b] hover:bg-[#1E4D3D]/10 hover:text-[#1E4D3D] transition-colors"
                   >
-                    <Trash2 className="h-3.5 w-3.5" />
-                    Remove
-                  </button>
+                    <Download className="h-3.5 w-3.5" />
+                    ID PDF
+                  </a>
                 </div>
               </Card>
             ))}
@@ -450,13 +383,13 @@ export default function EmployeesPage() {
                         >
                           {emp.isActive ? <UserX className="h-4 w-4" /> : <UserCheck2 className="h-4 w-4" />}
                         </button>
-                        <button
-                          onClick={() => setDeleteEmployee(emp)}
-                          className="rounded p-1.5 text-[#64748b] hover:bg-red-50 hover:text-red-600 transition-colors"
-                          title="Remove employee"
+                        <a
+                          href={`/api/employees/${emp.id}/id-card-pdf`}
+                          className="rounded p-1.5 text-[#64748b] hover:bg-[#1E4D3D]/10 hover:text-[#1E4D3D] transition-colors"
+                          title="Download ID PDF"
                         >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
+                          <Download className="h-4 w-4" />
+                        </a>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -530,14 +463,6 @@ export default function EmployeesPage() {
         loading={toggleLoading}
         onConfirm={handleToggleActive}
         onCancel={() => setToggleEmployee(null)}
-      />
-
-      <DeleteConfirmModal
-        open={!!deleteEmployee}
-        employee={deleteEmployee}
-        loading={deleteLoading}
-        onConfirm={handleDelete}
-        onCancel={() => setDeleteEmployee(null)}
       />
 
       {/* Mobile FAB */}

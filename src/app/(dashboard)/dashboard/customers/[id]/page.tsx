@@ -89,6 +89,7 @@ interface Customer {
   fieldVisits: FieldVisit[];
   orders: Order[];
   returns: CustomerReturn[];
+  _count: { orders: number; returns: number };
 }
 
 const STATUS_OPTIONS = [
@@ -249,6 +250,30 @@ export default function CustomerProfilePage() {
         <CustomerStatusBadge status={customer.status} className="text-sm px-3 py-1" />
       </div>
 
+      {/* Order/Return summary stats */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div className="rounded-xl bg-white border border-[#e2e8f0] p-4">
+          <p className="text-2xl font-bold text-[#1a1a1a]">{customer._count.orders}</p>
+          <p className="text-xs text-[#64748b] mt-0.5">Total Orders</p>
+        </div>
+        <div className="rounded-xl bg-white border border-[#e2e8f0] p-4">
+          <p className="text-2xl font-bold text-[#1a1a1a]">{customer._count.returns}</p>
+          <p className="text-xs text-[#64748b] mt-0.5">Total Returns</p>
+        </div>
+        <div className="rounded-xl bg-white border border-[#e2e8f0] p-4">
+          <p className="text-lg font-bold text-[#1a1a1a]">
+            {customer.orders[0] ? formatDate(customer.orders[0].createdAt) : "—"}
+          </p>
+          <p className="text-xs text-[#64748b] mt-0.5">Last Order Date</p>
+        </div>
+        <div className="rounded-xl bg-white border border-[#e2e8f0] p-4">
+          <p className="text-lg font-bold text-[#1a1a1a]">
+            {customer.returns[0] ? formatDate(customer.returns[0].createdAt) : "—"}
+          </p>
+          <p className="text-xs text-[#64748b] mt-0.5">Last Return Date</p>
+        </div>
+      </div>
+
       {/* Two-column layout */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
         {/* Left column — 40% */}
@@ -404,20 +429,7 @@ export default function CustomerProfilePage() {
               ) : (
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                   {customer.photos.map((photo) => (
-                    <div key={photo.id} className="relative group">
-                      <img
-                        src={photo.imageUrl}
-                        alt="Customer photo"
-                        className={`h-32 w-full rounded-lg object-cover ${
-                          photo.isFront ? "ring-2 ring-[#1E4D3D] ring-offset-1" : ""
-                        }`}
-                      />
-                      {photo.isFront && (
-                        <span className="absolute top-1.5 left-1.5 rounded-full bg-[#1E4D3D] px-2 py-0.5 text-[10px] font-medium text-white">
-                          Front
-                        </span>
-                      )}
-                    </div>
+                    <PhotoThumb key={photo.id} imageUrl={photo.imageUrl} isFront={photo.isFront} />
                   ))}
                 </div>
               )}
@@ -629,6 +641,35 @@ export default function CustomerProfilePage() {
           </Card>
         </div>
       </div>
+    </div>
+  );
+}
+
+function PhotoThumb({ imageUrl, isFront }: { imageUrl: string; isFront: boolean }) {
+  const [failed, setFailed] = useState(false);
+
+  return (
+    <div className="relative group">
+      {failed ? (
+        <div className="flex h-32 w-full flex-col items-center justify-center gap-1 rounded-lg bg-[#f1f5f9] text-[#94a3b8]">
+          <Camera className="h-6 w-6" />
+          <span className="text-[10px]">Image unavailable</span>
+        </div>
+      ) : (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={imageUrl}
+          alt="Customer photo"
+          loading="lazy"
+          onError={() => setFailed(true)}
+          className={`h-32 w-full rounded-lg object-cover ${isFront ? "ring-2 ring-[#1E4D3D] ring-offset-1" : ""}`}
+        />
+      )}
+      {isFront && !failed && (
+        <span className="absolute top-1.5 left-1.5 rounded-full bg-[#1E4D3D] px-2 py-0.5 text-[10px] font-medium text-white">
+          Front
+        </span>
+      )}
     </div>
   );
 }

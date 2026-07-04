@@ -454,88 +454,16 @@ export default function SettingsPage() {
 
       {activeTab === "commission" && (
         <Card>
-          <CardHeader><CardTitle>Commission Settings</CardTitle></CardHeader>
+          <CardHeader><CardTitle>Commission Structure</CardTitle></CardHeader>
           <CardContent>
             <div className="flex flex-col gap-6 max-w-md">
-              <div className="flex flex-col gap-2">
-                <label className="text-sm font-medium text-[#1a1a1a]">
-                  Default Commission: <span className="text-[#1E4D3D] font-bold">{commission.defaultPercentage}%</span>
-                </label>
-                <input
-                  type="range"
-                  min={commission.minPercentage}
-                  max={commission.maxPercentage}
-                  step={0.5}
-                  value={commission.defaultPercentage}
-                  onChange={(e) => setCommission((p) => ({ ...p, defaultPercentage: parseFloat(e.target.value) }))}
-                  className="w-full accent-[#1E4D3D]"
-                />
-                <div className="flex justify-between text-xs text-[#64748b]">
-                  <span>{commission.minPercentage}%</span>
-                  <span>{commission.maxPercentage}%</span>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-sm font-medium text-[#1a1a1a]">Minimum %</label>
-                  <input
-                    type="number"
-                    min={0}
-                    max={commission.defaultPercentage}
-                    step={0.5}
-                    value={commission.minPercentage}
-                    onChange={(e) => setCommission((p) => ({ ...p, minPercentage: parseFloat(e.target.value) }))}
-                    className="w-full rounded-md border border-[#e2e8f0] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3B7A57]"
-                  />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-sm font-medium text-[#1a1a1a]">Maximum %</label>
-                  <input
-                    type="number"
-                    min={commission.defaultPercentage}
-                    max={100}
-                    step={0.5}
-                    value={commission.maxPercentage}
-                    onChange={(e) => setCommission((p) => ({ ...p, maxPercentage: parseFloat(e.target.value) }))}
-                    className="w-full rounded-md border border-[#e2e8f0] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3B7A57]"
-                  />
-                </div>
-              </div>
-              <div className="rounded-md bg-[#1E4D3D]/5 px-4 py-3 text-sm text-[#1E4D3D]">
-                Employees earn {commission.defaultPercentage}% base commission (range: {commission.minPercentage}%–{commission.maxPercentage}%).
-              </div>
-
-              {/* Weekly Performance Bonus */}
-              <div className="border-t border-[#e2e8f0] pt-5">
-                <p className="text-sm font-semibold text-[#1a1a1a] mb-1">Weekly Performance Commission</p>
-                <p className="text-xs text-[#64748b] mb-4">When an employee&apos;s weekly delivered sales exceed the threshold, a higher commission rate applies automatically.</p>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-sm font-medium text-[#1a1a1a]">Sales Threshold (₹)</label>
-                    <input
-                      type="number"
-                      min={0}
-                      step={1000}
-                      value={commission.weeklyBonusThreshold}
-                      onChange={(e) => setCommission((p) => ({ ...p, weeklyBonusThreshold: parseFloat(e.target.value) || 0 }))}
-                      className="w-full rounded-md border border-[#e2e8f0] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3B7A57]"
-                    />
-                  </div>
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-sm font-medium text-[#1a1a1a]">Bonus Commission Rate (%)</label>
-                    <input
-                      type="number"
-                      min={0}
-                      max={100}
-                      step={0.5}
-                      value={commission.weeklyBonusRate}
-                      onChange={(e) => setCommission((p) => ({ ...p, weeklyBonusRate: parseFloat(e.target.value) || 0 }))}
-                      className="w-full rounded-md border border-[#e2e8f0] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3B7A57]"
-                    />
-                  </div>
-                </div>
-                <div className="mt-3 rounded-md bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">
-                  Employees who deliver ₹{commission.weeklyBonusThreshold.toLocaleString("en-IN")}+ in a week earn {commission.weeklyBonusRate}% commission on those sales.
+              <div>
+                <p className="text-sm font-semibold text-[#1a1a1a] mb-1">Fixed Commission Rate</p>
+                <p className="text-xs text-[#64748b] mb-3">
+                  Commission is calculated automatically for every employee — this is not configurable from the admin panel.
+                </p>
+                <div className="rounded-md bg-[#1E4D3D]/5 px-4 py-3 text-sm text-[#1E4D3D]">
+                  Every employee earns a flat <strong>30%</strong> commission on their eligible sales.
                 </div>
               </div>
 
@@ -581,16 +509,11 @@ export default function SettingsPage() {
             </div>
             <div className="mt-6 flex justify-end">
               <Button loading={saving} onClick={() => saveSettings("commission", {
-                defaultPercentage: commission.defaultPercentage,
-                minPercentage: commission.minPercentage,
-                maxPercentage: commission.maxPercentage,
-                weeklyBonusThreshold: commission.weeklyBonusThreshold,
-                weeklyBonusRate: commission.weeklyBonusRate,
                 freeGiftEnabled: commission.freeGiftEnabled,
                 freeGiftProductName: commission.freeGiftProductName,
                 freeGiftMinAmount: commission.freeGiftMinAmount,
               })}>
-                Save Commission Settings
+                Save Free Gift Settings
               </Button>
             </div>
           </CardContent>

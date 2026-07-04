@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { recalculateEmployeeCommission } from "@/lib/commission";
 
 function getWeekRange() {
   const now = new Date();
@@ -158,12 +159,14 @@ export async function POST(request: NextRequest) {
             },
           });
 
+          const { commissionRate } = await recalculateEmployeeCommission(employee.id, tx);
+
           await tx.commission.create({
             data: {
               employeeId: employee.id,
               orderId: created.id,
-              amount: (totalAmount * employee.commissionPercent) / 100,
-              percentage: employee.commissionPercent,
+              amount: (totalAmount * commissionRate) / 100,
+              percentage: commissionRate,
             },
           });
 

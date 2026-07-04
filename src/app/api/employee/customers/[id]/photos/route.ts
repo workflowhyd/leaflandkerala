@@ -21,25 +21,34 @@ export async function POST(
   });
   if (!customer) return NextResponse.json({ error: "Customer not found" }, { status: 404 });
 
-  const { imageData, isFront } = await request.json();
+  const { imageData, isFront, orderId } = await request.json();
   if (!imageData) return NextResponse.json({ error: "imageData required" }, { status: 400 });
 
-  const { url, publicId } = await uploadImage(imageData, "customers");
+  if (orderId) {
+    const order = await prisma.order.findFirst({ where: { id: orderId, customerId, employeeId: employee.id } });
+    if (!order) return NextResponse.json({ error: "Order not found for this customer" }, { status: 404 });
+  }
 
-  const photo = await prisma.customerPhoto.create({
-    data: { customerId, imageUrl: url, publicId, isFront: isFront ?? false },
-  });
+  try {
+    const { url, publicId } = await uploadImage(imageData, "customers");
 
-  // Activity log
-  await prisma.activityLog.create({
-    data: {
-      userId: session.userId,
-      customerId,
-      type: "PHOTO_UPLOAD",
-      description: `House photo uploaded for ${customer.name}`,
-      metadata: { imageUrl: url, publicId },
-    },
-  });
+    const photo = await prisma.customerPhoto.create({
+      data: { customerId, orderId: orderId || null, imageUrl: url, publicId, isFront: isFront ?? false },
+    });
 
-  return NextResponse.json(photo, { status: 201 });
+    await prisma.activityLog.create({
+      data: {
+        userId: session.userId,
+        customerId,
+        type: "PHOTO_UPLOAD",
+        description: `House photo uploaded for ${customer.name}`,
+        metadata: { imageUrl: url, publicId },
+      },
+    }).catch((e) => console.error("[customers/photos] activityLog create failed:", e));
+
+    return NextResponse.json(photo, { status: 201 });
+  } catch (err) {
+    console.error("[employee/customers/photos POST] Upload failed:", err);
+    return NextResponse.json({ error: "Photo upload failed. Please try again." }, { status: 502 });
+  }
 }

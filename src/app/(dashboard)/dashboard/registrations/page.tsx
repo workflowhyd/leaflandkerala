@@ -86,7 +86,6 @@ function ApproveModal({
   const { success, error: toastError } = useToast();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState(generatePassword());
-  const [commissionPercent, setCommissionPercent] = useState(10);
   const [copied, setCopied] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -95,7 +94,6 @@ function ApproveModal({
     if (open) {
       setEmail("");
       setPassword(generatePassword());
-      setCommissionPercent(10);
       setCopied(false);
     }
   }, [open]);
@@ -115,7 +113,6 @@ function ApproveModal({
           action: "approve",
           email: email.trim(),
           password,
-          commissionPercent,
         }),
       });
       const data = await res.json();
@@ -217,28 +214,6 @@ function ApproveModal({
             <p className="mt-1 text-xs" style={{ color: "#94a3b8" }}>
               Share this password with the employee securely.
             </p>
-          </div>
-
-          {/* Commission % */}
-          <div>
-            <label
-              className="block text-sm font-medium mb-1.5"
-              style={{ color: "#374151" }}
-            >
-              Commission %
-            </label>
-            <input
-              type="number"
-              min={0}
-              max={100}
-              step={0.5}
-              value={commissionPercent}
-              onChange={(e) =>
-                setCommissionPercent(parseFloat(e.target.value) || 10)
-              }
-              className="w-full rounded-lg border px-3 py-2 text-sm outline-none focus:ring-2"
-              style={{ borderColor: "#e2e8f0" }}
-            />
           </div>
         </div>
       )}

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
+import { recalculateEmployeeCommission } from "@/lib/commission";
+import { performDeliveryCleanup } from "@/lib/delivery-cleanup";
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await getSession();
@@ -33,6 +35,12 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       where: { id: order.customerId },
       data: { status: "ACTIVE" },
     });
+    // Privacy: house photo + GPS were only needed to complete this delivery.
+    await performDeliveryCleanup(id, session.userId);
+  }
+
+  if (status === "CANCELLED") {
+    await recalculateEmployeeCommission(order.employeeId);
   }
 
   await prisma.activityLog.create({

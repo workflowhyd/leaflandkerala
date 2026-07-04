@@ -4,7 +4,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 import {
   ArrowLeft, Plus, Minus, Search, Trash2, MapPin, CheckCircle,
   ChevronRight, ShoppingCart, X, AlertCircle, Camera, MessageCircle,
-  Home, ExternalLink, RefreshCw, Navigation,
+  Home, ExternalLink, RefreshCw, Navigation, Image as ImageIcon,
 } from "lucide-react";
 import { useCart, CartItem } from "@/components/employee/cart-context";
 import { compressImage } from "@/lib/compress-image";
@@ -146,6 +146,7 @@ function OrdersPageContent() {
   const [gpsError, setGpsError] = useState<string | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [photoData, setPhotoData] = useState<string | null>(null);
+  const [photoUploadStatus, setPhotoUploadStatus] = useState<"idle" | "uploading" | "success" | "error">("idle");
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
   const [placedOrder, setPlacedOrder] = useState<PlacedOrder | null>(null);
@@ -154,6 +155,7 @@ function OrdersPageContent() {
   const productTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const customerTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const handler = () => flushQueue();
@@ -231,13 +233,36 @@ function OrdersPageContent() {
 
   async function handlePhoto(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
+    e.target.value = "";
     if (!file) return;
     try {
       const compressed = await compressImage(file);
       setPhotoPreview(compressed);
       setPhotoData(compressed);
+      setPhotoUploadStatus("idle");
     } catch {
       setPhotoPreview(null);
+    }
+  }
+
+  async function uploadHousePhoto(customerId: string, orderId: string, data: string, attempt = 0): Promise<boolean> {
+    setPhotoUploadStatus("uploading");
+    try {
+      const res = await fetch(`/api/employee/customers/${customerId}/photos`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ imageData: data, isFront: false, orderId }),
+      });
+      if (!res.ok) throw new Error("Upload failed");
+      setPhotoUploadStatus("success");
+      return true;
+    } catch {
+      if (attempt < 2) {
+        await new Promise((r) => setTimeout(r, 800 * (attempt + 1)));
+        return uploadHousePhoto(customerId, orderId, data, attempt + 1);
+      }
+      setPhotoUploadStatus("error");
+      return false;
     }
   }
 
@@ -288,12 +313,9 @@ function OrdersPageContent() {
         setPlacedOrder(data);
         clearCart();
 
-        // Upload photo in background
+        // Upload the house photo — awaited with retries so a failure is never silent.
         if (photoData && selectedCustomer) {
-          fetch(`/api/employee/customers/${selectedCustomer.id}/photos`, {
-            method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ imageData: photoData, isFront: false }),
-          }).catch(() => {});
+          await uploadHousePhoto(selectedCustomer.id, data.id, photoData);
         }
 
         setStep("success");
@@ -325,6 +347,7 @@ function OrdersPageContent() {
     setGps(null);
     setPhotoPreview(null);
     setPhotoData(null);
+    setPhotoUploadStatus("idle");
     setPlacedOrder(null);
     setCustomerQuery("");
     setProductQuery("");
@@ -337,7 +360,14 @@ function OrdersPageContent() {
   if (step === "list") return <OrdersList orders={orders} loading={loadingOrders} onNew={() => setStep("products")} />;
 
   if (step === "success" && placedOrder) return (
-    <SuccessScreen order={placedOrder} onDone={resetFlow} />
+    <SuccessScreen
+      order={placedOrder}
+      onDone={resetFlow}
+      photoUploadStatus={photoData ? photoUploadStatus : "idle"}
+      onRetryPhoto={() => {
+        if (photoData && selectedCustomer) uploadHousePhoto(selectedCustomer.id, placedOrder.id, photoData);
+      }}
+    />
   );
 
   if (step === "products") return (
@@ -551,10 +581,17 @@ function OrdersPageContent() {
         )}
 
         <input ref={fileInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handlePhoto} />
-        <button onClick={() => fileInputRef.current?.click()}
-          className="flex items-center gap-2 bg-green-600 text-white px-6 py-3 rounded-xl font-medium shadow-sm active:bg-green-700">
-          <Camera size={18} /> {photoPreview ? "Retake Photo" : "Take Photo"}
-        </button>
+        <input ref={galleryInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhoto} />
+        <div className="flex gap-3">
+          <button onClick={() => fileInputRef.current?.click()}
+            className="flex items-center gap-2 bg-green-600 text-white px-5 py-3 rounded-xl font-medium shadow-sm active:bg-green-700">
+            <Camera size={18} /> {photoPreview ? "Retake" : "Camera"}
+          </button>
+          <button onClick={() => galleryInputRef.current?.click()}
+            className="flex items-center gap-2 border border-gray-200 text-gray-600 px-5 py-3 rounded-xl font-medium bg-white active:bg-gray-50">
+            <ImageIcon size={18} /> Gallery
+          </button>
+        </div>
         <p className="text-xs text-gray-400 text-center">Take a photo of the customer&apos;s house entrance</p>
       </div>
 
@@ -670,7 +707,14 @@ function OrdersPageContent() {
 
 // ─── Success Screen ────────────────────────────────────────────────────────────
 
-function SuccessScreen({ order, onDone }: { order: PlacedOrder; onDone: () => void }) {
+function SuccessScreen({
+  order, onDone, photoUploadStatus, onRetryPhoto,
+}: {
+  order: PlacedOrder;
+  onDone: () => void;
+  photoUploadStatus?: "idle" | "uploading" | "success" | "error";
+  onRetryPhoto?: () => void;
+}) {
   const delivery = order.deliveryDateStr ?? new Date(order.deliveryDate).toLocaleDateString("en-IN", {
     weekday: "long", day: "numeric", month: "long",
   });
@@ -687,6 +731,25 @@ function SuccessScreen({ order, onDone }: { order: PlacedOrder; onDone: () => vo
           <h1 className="text-2xl font-bold text-gray-800">Order Placed!</h1>
           <p className="text-gray-400 text-sm mt-1">for {order.customer.name}</p>
         </div>
+
+        {photoUploadStatus === "error" && (
+          <div className="w-full flex items-center gap-3 bg-red-50 border border-red-100 rounded-xl px-4 py-3">
+            <AlertCircle size={18} className="text-red-500 shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm text-red-600 font-medium">House photo failed to upload</p>
+              <p className="text-xs text-red-400">The order was placed successfully. Please retry the photo.</p>
+            </div>
+            <button onClick={onRetryPhoto}
+              className="shrink-0 text-xs font-semibold text-red-600 border border-red-200 rounded-lg px-3 py-1.5 active:bg-red-100">
+              Retry
+            </button>
+          </div>
+        )}
+        {photoUploadStatus === "uploading" && (
+          <div className="w-full flex items-center gap-2 bg-gray-100 rounded-xl px-4 py-3 text-gray-500 text-sm">
+            <Spinner className="border-gray-400" /> Uploading house photo...
+          </div>
+        )}
 
         {/* Order details */}
         <div className="w-full bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">

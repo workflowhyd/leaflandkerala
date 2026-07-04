@@ -9,9 +9,15 @@ const employeeSchema = z.object({
   email: z.string().min(5),
   mobile: z.string().min(10).max(15),
   password: z.string().min(8),
-  address: z.string().optional(),
-  commissionPercent: z.number().min(5).max(15).default(10),
+  address: z.string().min(1, "Address is required"),
   territory: z.string().optional(),
+  isActive: z.boolean().default(true),
+  governmentIdType: z.enum(["AADHAAR", "PAN", "DRIVING_LICENSE", "VOTER_ID"]),
+  governmentIdNumber: z.string().min(1, "Government ID number is required"),
+  governmentIdFrontUrl: z.string().min(1, "Front image is required"),
+  governmentIdFrontPublicId: z.string().optional(),
+  governmentIdBackUrl: z.string().min(1, "Back image is required"),
+  governmentIdBackPublicId: z.string().optional(),
 });
 
 export async function GET(request: NextRequest) {
@@ -35,6 +41,7 @@ export async function GET(request: NextRequest) {
       { name: { contains: search, mode: "insensitive" } },
       { email: { contains: search, mode: "insensitive" } },
       { mobile: { contains: search } },
+      { governmentIdNumber: { contains: search, mode: "insensitive" } },
     ];
   }
 
@@ -75,6 +82,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Email already exists" }, { status: 409 });
   }
 
+  const existingMobile = await prisma.employee.findUnique({
+    where: { mobile: parsed.data.mobile },
+  });
+  if (existingMobile) {
+    return NextResponse.json({ error: "Mobile number is already registered to another employee" }, { status: 409 });
+  }
+
   const supabaseAdmin = createSupabaseAdmin();
 
   // Create the user in Supabase Auth
@@ -112,8 +126,14 @@ export async function POST(request: NextRequest) {
           email: parsed.data.email,
           mobile: parsed.data.mobile,
           address: parsed.data.address,
-          commissionPercent: parsed.data.commissionPercent,
           territory: parsed.data.territory,
+          isActive: parsed.data.isActive,
+          governmentIdType: parsed.data.governmentIdType,
+          governmentIdNumber: parsed.data.governmentIdNumber,
+          governmentIdFrontUrl: parsed.data.governmentIdFrontUrl,
+          governmentIdFrontPublicId: parsed.data.governmentIdFrontPublicId,
+          governmentIdBackUrl: parsed.data.governmentIdBackUrl,
+          governmentIdBackPublicId: parsed.data.governmentIdBackPublicId,
         },
       },
     },

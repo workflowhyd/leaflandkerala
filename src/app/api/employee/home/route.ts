@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getWeeklyCommission } from "@/lib/commission";
+import { recalculateEmployeeCommission } from "@/lib/commission";
 
 function getWeekRange() {
   const now = new Date();
@@ -27,7 +27,7 @@ export async function GET() {
 
   const { weekStart, weekEnd } = getWeekRange();
 
-  const [weekOrders, pendingOrders, totalCommission, weeklyInfo, availableEarningsAgg, lastPayment] = await Promise.all([
+  const [weekOrders, pendingOrders, totalCommission, commissionInfo, availableEarningsAgg, lastPayment] = await Promise.all([
     prisma.order.count({
       where: {
         employeeId: employee.id,
@@ -46,7 +46,8 @@ export async function GET() {
       where: { employeeId: employee.id },
       _sum: { amount: true },
     }),
-    getWeeklyCommission(employee.id, weekStart, weekEnd),
+    // Recalculated on read so week/month rollovers are always reflected immediately.
+    recalculateEmployeeCommission(employee.id),
     prisma.commission.aggregate({
       where: {
         employeeId: employee.id,
@@ -86,18 +87,13 @@ export async function GET() {
     name: session.name,
     weekOrders,
     pendingOrders,
-    estimatedCommission: weeklyInfo.weeklyCommission,
     totalEarnings: totalCommission._sum.amount ?? 0,
-    commissionPercent: employee.commissionPercent,
     daysUntilDelivery,
     weekDays,
-    weeklySales: weeklyInfo.weeklySales,
-    weeklyOrdersDelivered: weeklyInfo.weeklyOrdersDelivered,
-    weeklyCommission: weeklyInfo.weeklyCommission,
-    weeklyCommissionRate: weeklyInfo.commissionRate,
-    isEligibleForBonus: weeklyInfo.isEligible,
-    bonusThreshold: weeklyInfo.threshold,
-    bonusRate: weeklyInfo.bonusRate,
+    weeklySales: commissionInfo.weeklySales,
+    monthlySales: commissionInfo.monthlySales,
+    commissionRate: commissionInfo.commissionRate,
+    commissionAmount: commissionInfo.commissionAmount,
     availableEarnings: availableEarningsAgg._sum.amount ?? 0,
     lastPaymentDate: lastPayment?.createdAt ?? null,
     lastPaymentAmount: lastPayment?.amount ?? null,
