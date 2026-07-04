@@ -256,7 +256,7 @@ function DetailModal({ open, request, onClose }: {
           <div>
             <p className="text-xs text-[#64748b] uppercase tracking-wide mb-2">Government ID</p>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={request.governmentIdImageUrl} alt="Government ID" className="w-full max-h-64 object-contain rounded-lg border border-[#e2e8f0]" />
+            <img src={request.governmentIdImageUrl} alt="Government ID" loading="lazy" decoding="async" className="w-full max-h-64 object-contain rounded-lg border border-[#e2e8f0]" />
           </div>
         )}
         {request.adminNotes && (

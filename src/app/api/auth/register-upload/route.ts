@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { uploadRegistrationImage } from "@/lib/supabase/storage";
+import { MAX_IMAGE_BYTES, estimateDataUrlBytes } from "@/lib/image-limits";
 
 export async function POST(request: NextRequest) {
   let body: { imageData?: string };
@@ -22,10 +23,9 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const approxBytes = imageData.length * 0.75;
-  if (approxBytes > 550_000) {
+  if (estimateDataUrlBytes(imageData) > MAX_IMAGE_BYTES) {
     return NextResponse.json(
-      { error: "Image too large. Maximum 500KB." },
+      { error: "Image exceeds the 200 KB limit. Please choose a smaller image." },
       { status: 400 }
     );
   }

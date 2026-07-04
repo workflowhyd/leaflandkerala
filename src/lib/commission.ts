@@ -15,6 +15,17 @@ export function getCommissionRate(weeklySales: number): number {
   return BASE_COMMISSION_RATE;
 }
 
+/** Amount of weekly sales still needed to reach the next commission slab, or null if already at the top tier. */
+export function getNextSlabInfo(weeklySales: number): { nextRate: number; amountRemaining: number } | null {
+  const ascending = [...WEEKLY_COMMISSION_TIERS].sort((a, b) => a.threshold - b.threshold);
+  for (const tier of ascending) {
+    if (weeklySales < tier.threshold) {
+      return { nextRate: tier.rate, amountRemaining: tier.threshold - weeklySales };
+    }
+  }
+  return null;
+}
+
 export function getWeekRange(date: Date = new Date()) {
   const day = date.getDay();
   const diffToMon = day === 0 ? -6 : 1 - day;

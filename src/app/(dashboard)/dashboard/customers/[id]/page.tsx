@@ -31,6 +31,8 @@ import {
 } from "@/components/ui/table";
 import { CustomerStatusBadge } from "@/components/customers/customer-status-badge";
 import { formatDate, formatCurrency, getStatusLabel, getStatusColor } from "@/lib/utils";
+import { compressImageToTarget, ImageTooLargeError } from "@/lib/compress-image";
+import { cloudinaryThumb } from "@/lib/image-thumb";
 
 interface CustomerLocation {
   latitude: number;
@@ -112,6 +114,8 @@ export default function CustomerProfilePage() {
   const [newStatus, setNewStatus] = useState("");
   const [savingStatus, setSavingStatus] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [compressingPhoto, setCompressingPhoto] = useState(false);
+  const [photoUploadError, setPhotoUploadError] = useState("");
   const [capturingLocation, setCapturingLocation] = useState(false);
   const [locationError, setLocationError] = useState("");
 
@@ -156,29 +160,32 @@ export default function CustomerProfilePage() {
 
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    e.target.value = "";
     if (!file) return;
 
-    setUploadingPhoto(true);
+    setPhotoUploadError("");
+    setCompressingPhoto(true);
     try {
-      const reader = new FileReader();
-      reader.onloadend = async () => {
-        const base64 = reader.result as string;
-        const isFront = !customer?.photos.some((p) => p.isFront);
-        const res = await fetch(`/api/customers/${id}/photos`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ imageData: base64, isFront }),
-        });
-        if (res.ok) {
-          await fetchCustomer();
-        }
-        setUploadingPhoto(false);
-      };
-      reader.readAsDataURL(file);
-    } catch {
+      const compressed = await compressImageToTarget(file);
+      setCompressingPhoto(false);
+      setUploadingPhoto(true);
+      const isFront = !customer?.photos.some((p) => p.isFront);
+      const res = await fetch(`/api/customers/${id}/photos`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ imageData: compressed, isFront }),
+      });
+      if (res.ok) {
+        await fetchCustomer();
+      } else {
+        setPhotoUploadError("Photo upload failed. Please try again.");
+      }
+    } catch (err) {
+      setPhotoUploadError(err instanceof ImageTooLargeError ? err.message : "Could not process that photo. Please try another.");
+    } finally {
+      setCompressingPhoto(false);
       setUploadingPhoto(false);
     }
-    e.target.value = "";
   };
 
   const handleCaptureLocation = () => {
@@ -402,7 +409,7 @@ export default function CustomerProfilePage() {
                 </span>
                 <label
                   className={`inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-[#1E4D3D] bg-transparent px-3 py-1.5 text-sm font-medium text-[#1E4D3D] transition-colors hover:bg-[#1E4D3D] hover:text-[#F8F5EE] ${
-                    (uploadingPhoto || customer.photos.length >= 5)
+                    (uploadingPhoto || compressingPhoto || customer.photos.length >= 5)
                       ? "pointer-events-none opacity-50"
                       : ""
                   }`}
@@ -412,14 +419,17 @@ export default function CustomerProfilePage() {
                     accept="image/*"
                     className="hidden"
                     onChange={handlePhotoUpload}
-                    disabled={uploadingPhoto || customer.photos.length >= 5}
+                    disabled={uploadingPhoto || compressingPhoto || customer.photos.length >= 5}
                   />
                   <Upload className="h-3.5 w-3.5" />
-                  {uploadingPhoto ? "Uploading..." : "Upload Photo"}
+                  {compressingPhoto ? "Compressing..." : uploadingPhoto ? "Uploading..." : "Upload Photo"}
                 </label>
               </CardTitle>
             </CardHeader>
             <CardContent>
+              {photoUploadError && (
+                <p className="mb-3 text-xs text-[#D32F2F]">{photoUploadError}</p>
+              )}
               {customer.photos.length === 0 ? (
                 <div className="flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-[#e2e8f0] py-10">
                   <Camera className="h-10 w-10 text-[#64748b]/40 mb-2" />
@@ -658,11 +668,12 @@ function PhotoThumb({ imageUrl, isFront }: { imageUrl: string; isFront: boolean 
       ) : (
         // eslint-disable-next-line @next/next/no-img-element
         <img
-          src={imageUrl}
+          src={cloudinaryThumb(imageUrl, 240, 240)}
           alt="Customer photo"
           loading="lazy"
+          decoding="async"
           onError={() => setFailed(true)}
-          className={`h-32 w-full rounded-lg object-cover ${isFront ? "ring-2 ring-[#1E4D3D] ring-offset-1" : ""}`}
+          className={`h-32 w-full rounded-lg object-cover bg-gray-100 ${isFront ? "ring-2 ring-[#1E4D3D] ring-offset-1" : ""}`}
         />
       )}
       {isFront && !failed && (

@@ -15,6 +15,7 @@ import {
 import { Card } from "@/components/ui/card";
 import { ProductFormModal } from "@/components/products/product-form-modal";
 import { useToast } from "@/components/ui/toast";
+import { cloudinaryThumb } from "@/lib/image-thumb";
 import {
   Plus,
   Search,
@@ -121,7 +122,7 @@ function ProductImage({
   if (url && !imgError) {
     return (
       // eslint-disable-next-line @next/next/no-img-element
-      <img src={url} alt={name} className={imgClass} onError={() => setImgError(true)} />
+      <img src={cloudinaryThumb(url, 300, 300)} alt={name} className={`${imgClass} bg-gray-100`} loading="lazy" decoding="async" onError={() => setImgError(true)} />
     );
   }
   return (

@@ -3,9 +3,8 @@ import { useEffect, useState, useCallback, useRef, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   ArrowLeft, Plus, Search, ChevronRight, Check, X, AlertCircle,
-  Camera, Image as ImageIcon, CheckCircle, Minus, PackageX, Undo2,
+  CheckCircle, Minus, PackageX, Undo2,
 } from "lucide-react";
-import { compressImageToMaxSize } from "@/lib/compress-image";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -41,7 +40,7 @@ interface MyReturn {
   items: { quantity: number; product: { name: string } }[];
 }
 
-type Step = "list" | "customer" | "orders" | "items" | "reason" | "photos" | "confirm" | "success";
+type Step = "list" | "customer" | "orders" | "items" | "reason" | "confirm" | "success";
 
 const REASON_OPTIONS: { value: string; label: string }[] = [
   { value: "DAMAGED_PRODUCT", label: "Damaged Product" },
@@ -133,16 +132,11 @@ function ReturnsPageContent() {
   const [reasonNotes, setReasonNotes] = useState("");
   const [notes, setNotes] = useState("");
 
-  const [photos, setPhotos] = useState<string[]>([]);
-  const [photoError, setPhotoError] = useState("");
-
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
   const [createdReturn, setCreatedReturn] = useState<{ returnNumber: string } | null>(null);
 
   const customerTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const cameraInputRef = useRef<HTMLInputElement>(null);
-  const galleryInputRef = useRef<HTMLInputElement>(null);
 
   const loadMyReturns = useCallback(async () => {
     setLoadingReturns(true);
@@ -238,27 +232,6 @@ function ReturnsPageContent() {
     });
   }
 
-  async function handlePhotoFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    e.target.value = "";
-    if (!file) return;
-    if (photos.length >= 3) {
-      setPhotoError("You can upload a maximum of 3 photos");
-      return;
-    }
-    try {
-      const compressed = await compressImageToMaxSize(file, 500_000);
-      setPhotos((prev) => [...prev, compressed]);
-      setPhotoError("");
-    } catch {
-      setPhotoError("Could not process that photo. Please try another.");
-    }
-  }
-
-  function removePhoto(index: number) {
-    setPhotos((prev) => prev.filter((_, i) => i !== index));
-  }
-
   const selectedList = Object.values(selectedItems);
 
   async function handleSubmit() {
@@ -279,7 +252,6 @@ function ReturnsPageContent() {
           reason,
           reasonNotes: reason === "OTHER" ? reasonNotes : undefined,
           notes: notes || undefined,
-          images: photos.length ? photos : undefined,
         }),
       });
       const data = await res.json();
@@ -305,8 +277,6 @@ function ReturnsPageContent() {
     setReason("");
     setReasonNotes("");
     setNotes("");
-    setPhotos([]);
-    setPhotoError("");
     setSubmitError("");
     setCreatedReturn(null);
     setCustomerQuery("");
@@ -524,7 +494,7 @@ function ReturnsPageContent() {
       </div>
       <div className="px-4 pb-4">
         <button
-          onClick={() => setStep("photos")}
+          onClick={() => setStep("confirm")}
           disabled={!reason || (reason === "OTHER" && !reasonNotes.trim())}
           className="w-full bg-green-600 text-white py-4 rounded-xl font-semibold shadow-sm active:bg-green-700 disabled:opacity-40 flex items-center justify-center gap-2"
         >
@@ -534,65 +504,11 @@ function ReturnsPageContent() {
     </div>
   );
 
-  // ─── Step: photos ───────────────────────────────────────────────────────────
-
-  if (step === "photos") return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
-      <Header onBack={() => setStep("reason")} title="Photos (Optional)" />
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
-        <p className="text-sm text-gray-500">Add up to 3 photos of the returned item.</p>
-
-        {photos.length > 0 && (
-          <div className="grid grid-cols-3 gap-2">
-            {photos.map((p, i) => (
-              <div key={i} className="relative aspect-square">
-                <img src={p} alt={`Return photo ${i + 1}`} className="w-full h-full object-cover rounded-xl" />
-                <button onClick={() => removePhoto(i)}
-                  className="absolute -top-2 -right-2 w-6 h-6 bg-white rounded-full shadow flex items-center justify-center">
-                  <X size={13} className="text-gray-500" />
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {photoError && (
-          <div className="flex items-center gap-2 bg-red-50 border border-red-100 rounded-xl px-4 py-3 text-red-600 text-sm">
-            <AlertCircle size={16} />{photoError}
-          </div>
-        )}
-
-        {photos.length < 3 && (
-          <div className="flex gap-3">
-            <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handlePhotoFile} />
-            <input ref={galleryInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoFile} />
-            <button onClick={() => cameraInputRef.current?.click()}
-              className="flex-1 flex flex-col items-center gap-2 border-2 border-dashed border-gray-300 rounded-xl py-6 text-gray-500 active:bg-gray-50">
-              <Camera size={24} />
-              <span className="text-xs font-medium">Camera</span>
-            </button>
-            <button onClick={() => galleryInputRef.current?.click()}
-              className="flex-1 flex flex-col items-center gap-2 border-2 border-dashed border-gray-300 rounded-xl py-6 text-gray-500 active:bg-gray-50">
-              <ImageIcon size={24} />
-              <span className="text-xs font-medium">Gallery</span>
-            </button>
-          </div>
-        )}
-      </div>
-      <div className="px-4 pb-4">
-        <button onClick={() => setStep("confirm")}
-          className="w-full bg-green-600 text-white py-4 rounded-xl font-semibold shadow-sm active:bg-green-700 flex items-center justify-center gap-2">
-          {photos.length ? "Continue" : "Skip"} <ChevronRight size={18} />
-        </button>
-      </div>
-    </div>
-  );
-
   // ─── Step: confirm ──────────────────────────────────────────────────────────
 
   if (step === "confirm") return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
-      <Header onBack={() => setStep("photos")} title="Confirm Return" />
+      <Header onBack={() => setStep("reason")} title="Confirm Return" />
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
         <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
           <div className="flex items-center justify-between mb-2">
@@ -632,20 +548,6 @@ function ReturnsPageContent() {
           <p className="text-sm text-gray-700">{REASON_OPTIONS.find((r) => r.value === reason)?.label}</p>
           {reason === "OTHER" && <p className="text-xs text-gray-400 mt-1">{reasonNotes}</p>}
         </div>
-
-        {photos.length > 0 && (
-          <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Photos</p>
-              <button onClick={() => setStep("photos")} className="text-xs text-green-600">Edit</button>
-            </div>
-            <div className="grid grid-cols-3 gap-2">
-              {photos.map((p, i) => (
-                <img key={i} src={p} alt="" className="w-full aspect-square object-cover rounded-lg" />
-              ))}
-            </div>
-          </div>
-        )}
 
         <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
           <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Notes</p>

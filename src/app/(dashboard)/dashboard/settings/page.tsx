@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { Modal } from "@/components/ui/modal";
+import { compressImageToTarget, ImageTooLargeError } from "@/lib/compress-image";
 
 type TabId = "company" | "whatsapp" | "commission" | "pincodes" | "offers";
 
@@ -163,6 +164,8 @@ export default function SettingsPage() {
   const [deletePin, setDeletePin] = useState<Pincode | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const logoInputRef = useRef<HTMLInputElement>(null);
+  const [logoStage, setLogoStage] = useState<"idle" | "compressing" | "uploading">("idle");
+  const [logoError, setLogoError] = useState("");
 
   // Offers state
   const [offers, setOffers] = useState<Offer[]>([]);
@@ -220,21 +223,26 @@ export default function SettingsPage() {
 
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    e.target.value = "";
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = async () => {
-      const base64 = reader.result as string;
+    setLogoError("");
+    setLogoStage("compressing");
+    try {
+      const compressed = await compressImageToTarget(file);
+      setLogoStage("uploading");
       const res = await fetch("/api/upload", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ data: base64, folder: "logos" }),
+        body: JSON.stringify({ imageData: compressed, folder: "company" }),
       });
-      if (res.ok) {
-        const data = await res.json();
-        setCompany((prev) => ({ ...prev, logoUrl: data.url }));
-      }
-    };
-    reader.readAsDataURL(file);
+      if (!res.ok) throw new Error("Upload failed");
+      const data = await res.json();
+      setCompany((prev) => ({ ...prev, logoUrl: data.url }));
+    } catch (err) {
+      setLogoError(err instanceof ImageTooLargeError ? err.message : "Logo upload failed. Please try again.");
+    } finally {
+      setLogoStage("idle");
+    }
   };
 
   const handleAddPincode = async () => {
@@ -384,12 +392,13 @@ export default function SettingsPage() {
                 <label className="text-sm font-medium text-[#1a1a1a]">Company Logo</label>
                 {company.logoUrl && (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={company.logoUrl} alt="Logo" className="h-16 w-16 object-contain rounded-md border border-[#e2e8f0]" />
+                  <img src={company.logoUrl} alt="Logo" className="h-16 w-16 object-contain rounded-md border border-[#e2e8f0]" loading="lazy" decoding="async" />
                 )}
                 <input ref={logoInputRef} type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} />
-                <Button variant="outline" size="sm" className="w-fit" onClick={() => logoInputRef.current?.click()}>
-                  <Upload className="h-4 w-4" /> Upload Logo
+                <Button variant="outline" size="sm" className="w-fit" loading={logoStage !== "idle"} onClick={() => logoInputRef.current?.click()}>
+                  <Upload className="h-4 w-4" /> {logoStage === "compressing" ? "Compressing..." : logoStage === "uploading" ? "Uploading..." : "Upload Logo"}
                 </Button>
+                {logoError && <p className="text-xs text-[#D32F2F]">{logoError}</p>}
               </div>
             </div>
             <div className="mt-6 flex justify-end">

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { recalculateEmployeeCommission } from "@/lib/commission";
+import { recalculateEmployeeCommission, getNextSlabInfo } from "@/lib/commission";
 
 function getWeekRange() {
   const now = new Date();
@@ -83,6 +83,8 @@ export async function GET() {
     Math.ceil((nextSunday.getTime() - today.getTime()) / 86400000)
   );
 
+  const nextSlab = getNextSlabInfo(commissionInfo.weeklySales);
+
   return NextResponse.json({
     name: session.name,
     weekOrders,
@@ -91,9 +93,10 @@ export async function GET() {
     daysUntilDelivery,
     weekDays,
     weeklySales: commissionInfo.weeklySales,
-    monthlySales: commissionInfo.monthlySales,
     commissionRate: commissionInfo.commissionRate,
     commissionAmount: commissionInfo.commissionAmount,
+    nextSlabRate: nextSlab?.nextRate ?? null,
+    nextSlabAmountRemaining: nextSlab?.amountRemaining ?? null,
     availableEarnings: availableEarningsAgg._sum.amount ?? 0,
     lastPaymentDate: lastPayment?.createdAt ?? null,
     lastPaymentAmount: lastPayment?.amount ?? null,

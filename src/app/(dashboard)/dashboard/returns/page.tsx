@@ -10,6 +10,7 @@ import {
   Table, TableHeader, TableBody, TableRow, TableHead, TableCell,
 } from "@/components/ui/table";
 import { formatDateTime, getStatusColor, getStatusLabel } from "@/lib/utils";
+import { cloudinaryThumb } from "@/lib/image-thumb";
 
 interface ReturnListItem {
   id: string;
@@ -114,7 +115,7 @@ function DetailModal({ open, ret, onClose }: { open: boolean; ret: ReturnDetail 
               {ret.images.map((img) => (
                 <a key={img.id} href={img.imageUrl} target="_blank" rel="noopener noreferrer">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={img.imageUrl} alt="Return evidence" className="w-full aspect-square object-cover rounded-lg border" style={{ borderColor: "#e2e8f0" }} />
+                  <img src={cloudinaryThumb(img.imageUrl, 200, 200)} alt="Return evidence" loading="lazy" decoding="async" className="w-full aspect-square object-cover rounded-lg border" style={{ borderColor: "#e2e8f0" }} />
                 </a>
               ))}
             </div>

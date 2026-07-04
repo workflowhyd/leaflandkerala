@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import { uploadImage } from "@/lib/cloudinary";
+import { MAX_IMAGE_BYTES, estimateDataUrlBytes } from "@/lib/image-limits";
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await getSession();
@@ -31,6 +32,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const { imageData, isFront } = body;
 
   if (!imageData) return NextResponse.json({ error: "Image data required" }, { status: 400 });
+  if (estimateDataUrlBytes(imageData) > MAX_IMAGE_BYTES) {
+    return NextResponse.json({ error: "Image exceeds the 200 KB limit. Please choose a smaller image." }, { status: 400 });
+  }
 
   const { url, publicId } = await uploadImage(imageData, "customers");
 

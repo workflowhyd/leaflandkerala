@@ -7,8 +7,9 @@ import {
   Home, ExternalLink, RefreshCw, Navigation, Image as ImageIcon,
 } from "lucide-react";
 import { useCart, CartItem } from "@/components/employee/cart-context";
-import { compressImage } from "@/lib/compress-image";
+import { compressImageToTarget, ImageTooLargeError } from "@/lib/compress-image";
 import { getCategoryMeta } from "@/lib/category-images";
+import { cloudinaryThumb } from "@/lib/image-thumb";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -106,9 +107,11 @@ function ProductThumb({ imageUrl, category, serialNumber }: { imageUrl?: string 
   if (imageUrl && !imgError) {
     return (
       <img
-        src={imageUrl}
+        src={cloudinaryThumb(imageUrl, 96, 96)}
         alt={category}
-        className="w-12 h-12 rounded-lg object-cover shrink-0"
+        loading="lazy"
+        decoding="async"
+        className="w-12 h-12 rounded-lg object-cover shrink-0 bg-gray-100"
         onError={() => setImgError(true)}
       />
     );
@@ -147,6 +150,8 @@ function OrdersPageContent() {
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [photoData, setPhotoData] = useState<string | null>(null);
   const [photoUploadStatus, setPhotoUploadStatus] = useState<"idle" | "uploading" | "success" | "error">("idle");
+  const [compressingPhoto, setCompressingPhoto] = useState(false);
+  const [photoCompressError, setPhotoCompressError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
   const [placedOrder, setPlacedOrder] = useState<PlacedOrder | null>(null);
@@ -235,13 +240,19 @@ function OrdersPageContent() {
     const file = e.target.files?.[0];
     e.target.value = "";
     if (!file) return;
+    setPhotoCompressError("");
+    setCompressingPhoto(true);
     try {
-      const compressed = await compressImage(file);
+      const compressed = await compressImageToTarget(file);
       setPhotoPreview(compressed);
       setPhotoData(compressed);
       setPhotoUploadStatus("idle");
-    } catch {
+    } catch (err) {
       setPhotoPreview(null);
+      setPhotoData(null);
+      setPhotoCompressError(err instanceof ImageTooLargeError ? err.message : "Could not process that photo. Please try another.");
+    } finally {
+      setCompressingPhoto(false);
     }
   }
 
@@ -565,7 +576,12 @@ function OrdersPageContent() {
       <Header onBack={() => setStep("gps")} title="House Photo" />
 
       <div className="flex-1 flex flex-col items-center justify-center px-4 gap-4">
-        {photoPreview ? (
+        {compressingPhoto ? (
+          <div className="w-full max-w-xs aspect-video rounded-2xl bg-gray-100 border-2 border-dashed border-gray-300 flex flex-col items-center justify-center gap-3">
+            <div className="w-6 h-6 border-2 border-green-500 border-t-transparent rounded-full animate-spin" />
+            <p className="text-gray-400 text-sm">Compressing photo...</p>
+          </div>
+        ) : photoPreview ? (
           <div className="relative w-full max-w-xs">
             <img src={photoPreview} alt="Preview" className="w-full rounded-2xl shadow-md object-cover max-h-72" />
             <button onClick={() => { setPhotoPreview(null); setPhotoData(null); }}
@@ -580,15 +596,19 @@ function OrdersPageContent() {
           </div>
         )}
 
+        {photoCompressError && (
+          <p className="text-xs text-red-500 text-center max-w-xs">{photoCompressError}</p>
+        )}
+
         <input ref={fileInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handlePhoto} />
         <input ref={galleryInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhoto} />
         <div className="flex gap-3">
-          <button onClick={() => fileInputRef.current?.click()}
-            className="flex items-center gap-2 bg-green-600 text-white px-5 py-3 rounded-xl font-medium shadow-sm active:bg-green-700">
+          <button onClick={() => fileInputRef.current?.click()} disabled={compressingPhoto}
+            className="flex items-center gap-2 bg-green-600 text-white px-5 py-3 rounded-xl font-medium shadow-sm active:bg-green-700 disabled:opacity-60">
             <Camera size={18} /> {photoPreview ? "Retake" : "Camera"}
           </button>
-          <button onClick={() => galleryInputRef.current?.click()}
-            className="flex items-center gap-2 border border-gray-200 text-gray-600 px-5 py-3 rounded-xl font-medium bg-white active:bg-gray-50">
+          <button onClick={() => galleryInputRef.current?.click()} disabled={compressingPhoto}
+            className="flex items-center gap-2 border border-gray-200 text-gray-600 px-5 py-3 rounded-xl font-medium bg-white active:bg-gray-50 disabled:opacity-60">
             <ImageIcon size={18} /> Gallery
           </button>
         </div>

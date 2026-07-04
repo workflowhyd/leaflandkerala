@@ -2,7 +2,7 @@
 import { useEffect, useState, useCallback } from "react";
 import {
   Package, IndianRupee, Clock, Truck, CheckCircle, Circle,
-  ShoppingBag, Wallet, X,
+  ShoppingBag, Wallet, X, Percent, TrendingUp,
 } from "lucide-react";
 
 interface HomeData {
@@ -13,9 +13,10 @@ interface HomeData {
   daysUntilDelivery: number;
   weekDays: { label: string; date: string; done: boolean; isToday: boolean }[];
   weeklySales: number;
-  monthlySales: number;
   commissionRate: number;
   commissionAmount: number;
+  nextSlabRate: number | null;
+  nextSlabAmountRemaining: number | null;
   availableEarnings: number;
   lastPaymentDate: string | null;
   lastPaymentAmount: number | null;
@@ -369,21 +370,30 @@ export default function EmployeeHome() {
 
           <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
             <div className="flex items-center gap-2 mb-2">
-              <IndianRupee size={18} className="text-green-600" />
-              <span className="text-xs text-gray-500 font-medium">Monthly Sales</span>
+              <Package size={18} className="text-green-600" />
+              <span className="text-xs text-gray-500 font-medium">Weekly Orders Collected</span>
             </div>
-            <p className="text-2xl font-bold text-gray-800">
-              ₹{Math.round(data?.monthlySales ?? 0).toLocaleString("en-IN")}
-            </p>
-            <p className="text-xs text-gray-400 mt-1">{data?.commissionRate ?? 0}% commission rate</p>
+            <p className="text-3xl font-bold text-gray-800">{data?.weekOrders ?? 0}</p>
           </div>
 
           <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
             <div className="flex items-center gap-2 mb-2">
-              <Package size={18} className="text-green-600" />
-              <span className="text-xs text-gray-500 font-medium">Orders This Week</span>
+              <Percent size={18} className="text-purple-500" />
+              <span className="text-xs text-gray-500 font-medium">Commission Rate</span>
             </div>
-            <p className="text-3xl font-bold text-gray-800">{data?.weekOrders ?? 0}</p>
+            <p className="text-2xl font-bold text-gray-800">{data?.commissionRate ?? 0}%</p>
+            <p className="text-xs text-gray-400 mt-1">this week&apos;s slab</p>
+          </div>
+
+          <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+            <div className="flex items-center gap-2 mb-2">
+              <IndianRupee size={18} className="text-green-600" />
+              <span className="text-xs text-gray-500 font-medium">Commission Earned</span>
+            </div>
+            <p className="text-2xl font-bold text-gray-800">
+              ₹{Math.round(data?.commissionAmount ?? 0).toLocaleString("en-IN")}
+            </p>
+            <p className="text-xs text-gray-400 mt-1">this week</p>
           </div>
 
           <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
@@ -392,7 +402,27 @@ export default function EmployeeHome() {
               <span className="text-xs text-gray-500 font-medium">Pending Delivery</span>
             </div>
             <p className="text-3xl font-bold text-gray-800">{data?.pendingOrders ?? 0}</p>
-            <p className="text-xs text-gray-400 mt-1">in {data?.daysUntilDelivery ?? 0} days</p>
+            <p className="text-xs text-gray-400 mt-1">delivery in {data?.daysUntilDelivery ?? 0} day{data?.daysUntilDelivery === 1 ? "" : "s"} (Sun)</p>
+          </div>
+
+          <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+            <div className="flex items-center gap-2 mb-2">
+              <TrendingUp size={18} className="text-blue-500" />
+              <span className="text-xs text-gray-500 font-medium">Next Slab</span>
+            </div>
+            {data?.nextSlabAmountRemaining != null ? (
+              <>
+                <p className="text-lg font-bold text-gray-800">
+                  ₹{Math.round(data.nextSlabAmountRemaining).toLocaleString("en-IN")}
+                </p>
+                <p className="text-xs text-gray-400 mt-1">more sales for {data.nextSlabRate}%</p>
+              </>
+            ) : (
+              <>
+                <p className="text-lg font-bold text-green-700">Top Slab</p>
+                <p className="text-xs text-gray-400 mt-1">highest commission rate reached</p>
+              </>
+            )}
           </div>
         </div>
 

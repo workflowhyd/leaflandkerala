@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { uploadImage } from "@/lib/cloudinary";
+import { MAX_IMAGE_BYTES, estimateDataUrlBytes } from "@/lib/image-limits";
 
 export async function POST(
   request: NextRequest,
@@ -23,6 +24,9 @@ export async function POST(
 
   const { imageData, isFront, orderId } = await request.json();
   if (!imageData) return NextResponse.json({ error: "imageData required" }, { status: 400 });
+  if (estimateDataUrlBytes(imageData) > MAX_IMAGE_BYTES) {
+    return NextResponse.json({ error: "Image exceeds the 200 KB limit. Please choose a smaller image." }, { status: 400 });
+  }
 
   if (orderId) {
     const order = await prisma.order.findFirst({ where: { id: orderId, customerId, employeeId: employee.id } });

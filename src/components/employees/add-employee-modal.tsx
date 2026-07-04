@@ -6,8 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select } from "@/components/ui/select";
-import { Camera, Image as ImageIcon, X } from "lucide-react";
-import { compressImageToMaxSize } from "@/lib/compress-image";
+import { Camera, Image as ImageIcon, X, Loader2 } from "lucide-react";
+import { compressImageToTarget, ImageTooLargeError } from "@/lib/compress-image";
 
 interface AddEmployeeModalProps {
   open: boolean;
@@ -28,13 +28,14 @@ const STATUS_OPTIONS = [
 ];
 
 function IdPhotoCapture({
-  label, preview, onCapture, onClear, error,
+  label, preview, onCapture, onClear, error, compressing,
 }: {
   label: string;
   preview: string;
   onCapture: (file: File) => void;
   onClear: () => void;
   error?: string;
+  compressing?: boolean;
 }) {
   const cameraRef = useRef<HTMLInputElement>(null);
   const galleryRef = useRef<HTMLInputElement>(null);
@@ -48,10 +49,15 @@ function IdPhotoCapture({
   return (
     <div className="flex flex-col gap-1.5">
       <label className="text-sm font-medium text-[#1a1a1a]">{label} *</label>
-      {preview ? (
+      {compressing ? (
+        <div className="flex items-center gap-2 rounded-lg border-2 border-dashed border-[#e2e8f0] py-5 justify-center text-[#64748b]">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          <span className="text-xs">Compressing image...</span>
+        </div>
+      ) : preview ? (
         <div className="relative inline-block">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={preview} alt={label} className="h-32 w-auto rounded-lg border border-[#e2e8f0] object-contain" />
+          <img src={preview} alt={label} className="h-32 w-auto rounded-lg border border-[#e2e8f0] object-contain" loading="lazy" decoding="async" />
           <button
             type="button"
             onClick={onClear}
@@ -106,6 +112,8 @@ export function AddEmployeeModal({ open, onClose, onSuccess }: AddEmployeeModalP
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [frontPreview, setFrontPreview] = useState("");
   const [backPreview, setBackPreview] = useState("");
+  const [compressingFront, setCompressingFront] = useState(false);
+  const [compressingBack, setCompressingBack] = useState(false);
 
   const handleChange = (field: string, value: string) => {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -115,15 +123,29 @@ export function AddEmployeeModal({ open, onClose, onSuccess }: AddEmployeeModalP
   };
 
   async function handleFrontCapture(file: File) {
-    const compressed = await compressImageToMaxSize(file, 300_000);
-    setFrontPreview(compressed);
-    setFieldErrors((prev) => ({ ...prev, front: "" }));
+    setCompressingFront(true);
+    try {
+      const compressed = await compressImageToTarget(file);
+      setFrontPreview(compressed);
+      setFieldErrors((prev) => ({ ...prev, front: "" }));
+    } catch (err) {
+      setFieldErrors((prev) => ({ ...prev, front: err instanceof ImageTooLargeError ? err.message : "Could not process that photo. Please try another." }));
+    } finally {
+      setCompressingFront(false);
+    }
   }
 
   async function handleBackCapture(file: File) {
-    const compressed = await compressImageToMaxSize(file, 300_000);
-    setBackPreview(compressed);
-    setFieldErrors((prev) => ({ ...prev, back: "" }));
+    setCompressingBack(true);
+    try {
+      const compressed = await compressImageToTarget(file);
+      setBackPreview(compressed);
+      setFieldErrors((prev) => ({ ...prev, back: "" }));
+    } catch (err) {
+      setFieldErrors((prev) => ({ ...prev, back: err instanceof ImageTooLargeError ? err.message : "Could not process that photo. Please try another." }));
+    } finally {
+      setCompressingBack(false);
+    }
   }
 
   const validate = () => {
@@ -330,6 +352,7 @@ export function AddEmployeeModal({ open, onClose, onSuccess }: AddEmployeeModalP
                 onCapture={handleFrontCapture}
                 onClear={() => setFrontPreview("")}
                 error={fieldErrors.front}
+                compressing={compressingFront}
               />
               <IdPhotoCapture
                 label="Government ID — Back"
@@ -337,6 +360,7 @@ export function AddEmployeeModal({ open, onClose, onSuccess }: AddEmployeeModalP
                 onCapture={handleBackCapture}
                 onClear={() => setBackPreview("")}
                 error={fieldErrors.back}
+                compressing={compressingBack}
               />
             </div>
           </div>

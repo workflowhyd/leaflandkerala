@@ -2,46 +2,7 @@
 
 import { useState, useRef, ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
-
-// Client-side image compression
-async function compressImage(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const img = new window.Image();
-      img.onload = () => {
-        const canvas = document.createElement("canvas");
-        const maxDim = 1200;
-        let { width, height } = img;
-        if (width > maxDim || height > maxDim) {
-          if (width > height) {
-            height = Math.round((height / width) * maxDim);
-            width = maxDim;
-          } else {
-            width = Math.round((width / height) * maxDim);
-            height = maxDim;
-          }
-        }
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext("2d")!;
-        ctx.drawImage(img, 0, 0, width, height);
-        // Try to get under 350KB
-        const qualities = [0.85, 0.7, 0.55, 0.4];
-        let output = canvas.toDataURL("image/jpeg", 0.85);
-        for (const q of qualities) {
-          if (output.length * 0.75 < 360_000) break;
-          output = canvas.toDataURL("image/jpeg", q);
-        }
-        resolve(output);
-      };
-      img.onerror = reject;
-      img.src = e.target?.result as string;
-    };
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-}
+import { compressImageToTarget, ImageTooLargeError } from "@/lib/compress-image";
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -94,14 +55,17 @@ export default function RegisterPage() {
     setImagePreview(rawUrl);
 
     try {
-      const compressed = await compressImage(file);
+      const compressed = await compressImageToTarget(file);
       setCompressedImage(compressed);
       // compressed is base64; estimate bytes
       const approxBytes = Math.round((compressed.length * 3) / 4);
       setCompressedSize(approxBytes);
       setImagePreview(compressed);
-    } catch {
-      setError("Failed to process image. Please try a different file.");
+      setError("");
+    } catch (err) {
+      setError(err instanceof ImageTooLargeError ? err.message : "Failed to process image. Please try a different file.");
+      setCompressedImage(null);
+      setCompressedSize(0);
     } finally {
       setCompressing(false);
     }

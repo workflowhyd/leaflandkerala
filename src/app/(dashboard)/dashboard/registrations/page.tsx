@@ -341,6 +341,8 @@ function DetailModal({
           <img
             src={request.governmentIdImageUrl}
             alt="Government ID"
+            loading="lazy"
+            decoding="async"
             className="w-full rounded-lg border object-cover"
             style={{
               aspectRatio: "3/2",

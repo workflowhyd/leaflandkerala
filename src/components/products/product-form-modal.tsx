@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select } from "@/components/ui/select";
 import { ImagePlus, X, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { compressImageToTarget, ImageTooLargeError } from "@/lib/compress-image";
 
 const CATEGORY_OPTIONS = [
   { value: "MANGO", label: "Mango" },
@@ -86,8 +87,9 @@ export function ProductFormModal({
   const [form, setForm] = useState<FormState>(defaultForm);
   const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>({});
   const [loading, setLoading] = useState(false);
-  const [imageLoading, setImageLoading] = useState(false);
+  const [imageStage, setImageStage] = useState<"idle" | "compressing" | "uploading">("idle");
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const imageLoading = imageStage !== "idle";
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isEdit = !!product;
@@ -138,37 +140,33 @@ export function ProductFormModal({
 
   async function handleImageChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
+    e.target.value = "";
     if (!file) return;
 
-    // Preview
-    const reader = new FileReader();
-    reader.onload = (ev) => setImagePreview(ev.target?.result as string);
-    reader.readAsDataURL(file);
-
-    // Upload
-    setImageLoading(true);
+    setErrors((prev) => ({ ...prev, imageUrl: undefined }));
+    setImageStage("compressing");
     try {
-      const base64 = await new Promise<string>((resolve, reject) => {
-        const r = new FileReader();
-        r.onload = () => resolve(r.result as string);
-        r.onerror = reject;
-        r.readAsDataURL(file);
-      });
+      const compressed = await compressImageToTarget(file);
+      setImagePreview(compressed);
 
+      setImageStage("uploading");
       const res = await fetch("/api/upload", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ data: base64, folder: "products" }),
+        body: JSON.stringify({ data: compressed, folder: "products" }),
       });
 
       if (!res.ok) throw new Error("Upload failed");
       const result = await res.json();
       setField("imageUrl", result.url || result.secure_url || "");
       setField("imagePublicId", result.public_id || "");
-    } catch {
-      setErrors((prev) => ({ ...prev, imageUrl: "Image upload failed" }));
+    } catch (err) {
+      setErrors((prev) => ({
+        ...prev,
+        imageUrl: err instanceof ImageTooLargeError ? err.message : "Image upload failed",
+      }));
     } finally {
-      setImageLoading(false);
+      setImageStage("idle");
     }
   }
 
@@ -279,7 +277,11 @@ export function ProductFormModal({
             </div>
             <div className="flex-1">
               <p className="text-xs text-[#64748b]">
-                Click to upload a product image. JPG, PNG, WebP up to 5MB.
+                {imageStage === "compressing"
+                  ? "Compressing image..."
+                  : imageStage === "uploading"
+                  ? "Uploading..."
+                  : "Click to upload a product image. Automatically compressed to under 200 KB."}
               </p>
               {imagePreview && (
                 <button

@@ -327,7 +327,7 @@ function DetailModal({ open, request, onClose, onApprove, onReject }: {
           <div>
             <p className="text-[10px] font-semibold text-[#64748b] uppercase tracking-wide mb-2">Government ID Photo</p>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={request.governmentIdImageUrl} alt="Government ID"
+            <img src={request.governmentIdImageUrl} alt="Government ID" loading="lazy" decoding="async"
               className="w-full max-h-72 object-contain rounded-lg border border-[#e2e8f0] bg-gray-50" />
           </div>
         )}

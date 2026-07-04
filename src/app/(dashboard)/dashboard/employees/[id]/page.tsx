@@ -28,6 +28,7 @@ import {
   Download,
   AlertCircle,
   ExternalLink,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
@@ -44,6 +45,8 @@ import {
 } from "@/components/ui/table";
 import { CustomerStatusBadge } from "@/components/customers/customer-status-badge";
 import { formatDate, formatCurrency, getStatusLabel, getStatusColor } from "@/lib/utils";
+import { compressImageToTarget, ImageTooLargeError } from "@/lib/compress-image";
+import { cloudinaryThumb } from "@/lib/image-thumb";
 
 type TabId = "overview" | "documents" | "performance" | "customers" | "pincodes" | "timeline" | "payments";
 
@@ -187,10 +190,6 @@ const ID_TYPE_LABEL: Record<string, string> = {
   VOTER_ID: "Voter ID",
 };
 
-// Small, cached thumbnail — the full-resolution image only loads when "View" is clicked.
-function cloudinaryThumb(url: string, width: number, height: number) {
-  return url.replace("/upload/", `/upload/w_${width},h_${height},c_fill,q_auto/`);
-}
 
 const DOCUMENT_LABELS: Record<string, string> = {
   AADHAAR: "Aadhaar Card",
@@ -226,6 +225,7 @@ export default function EmployeeProfilePage() {
   const [docFile, setDocFile] = useState<File | null>(null);
   const [docPreview, setDocPreview] = useState("");
   const [uploadingDoc, setUploadingDoc] = useState(false);
+  const [compressingDoc, setCompressingDoc] = useState(false);
   const [docError, setDocError] = useState("");
 
   const fetchEmployee = useCallback(async () => {
@@ -334,14 +334,21 @@ export default function EmployeeProfilePage() {
     if (res.ok) fetchEmployee();
   };
 
-  const handleDocFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleDocFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
-    setDocFile(file);
-    const reader = new FileReader();
-    reader.onloadend = () => setDocPreview(reader.result as string);
-    reader.readAsDataURL(file);
     e.target.value = "";
+    if (!file) return;
+    setDocError("");
+    setCompressingDoc(true);
+    try {
+      const compressed = await compressImageToTarget(file);
+      setDocFile(file);
+      setDocPreview(compressed);
+    } catch (err) {
+      setDocError(err instanceof ImageTooLargeError ? err.message : "Could not process that image. Please try another.");
+    } finally {
+      setCompressingDoc(false);
+    }
   };
 
   const handleDocUpload = async () => {
@@ -707,6 +714,7 @@ export default function EmployeeProfilePage() {
                               src={cloudinaryThumb(url, 320, 200)}
                               alt={`Government ID ${label}`}
                               loading="lazy"
+                              decoding="async"
                               className="w-full rounded-md border border-[#e2e8f0] object-cover"
                               style={{ aspectRatio: "16/10" }}
                             />
@@ -802,12 +810,19 @@ export default function EmployeeProfilePage() {
                   />
                 </div>
                 <div className="flex-1">
-                  {docPreview ? (
+                  {compressingDoc ? (
+                    <div className="flex items-center gap-2 rounded-lg border-2 border-dashed border-[#e2e8f0] py-5 justify-center text-[#64748b]">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span className="text-xs">Compressing image...</span>
+                    </div>
+                  ) : docPreview ? (
                     <div className="relative inline-block">
                       <img
                         src={docPreview}
                         alt="Document preview"
                         className="h-24 w-auto rounded-lg border border-[#e2e8f0] object-contain"
+                        loading="lazy"
+                        decoding="async"
                       />
                       <button
                         onClick={() => { setDocFile(null); setDocPreview(""); }}
@@ -831,7 +846,7 @@ export default function EmployeeProfilePage() {
                 </div>
                 <Button
                   onClick={handleDocUpload}
-                  disabled={!docFile}
+                  disabled={!docFile || compressingDoc}
                   loading={uploadingDoc}
                 >
                   <Upload className="h-4 w-4" />
@@ -857,8 +872,10 @@ export default function EmployeeProfilePage() {
                   {employee.documents.map((doc) => (
                     <div key={doc.id} className="rounded-lg border border-[#e2e8f0] overflow-hidden">
                       <img
-                        src={doc.imageUrl}
+                        src={cloudinaryThumb(doc.imageUrl, 320, 200)}
                         alt={DOCUMENT_LABELS[doc.type] || doc.type}
+                        loading="lazy"
+                        decoding="async"
                         className="h-36 w-full object-cover"
                       />
                       <div className="p-2">
