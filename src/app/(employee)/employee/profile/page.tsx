@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   LogOut, User, Mail, MapPin, Percent, Phone, IndianRupee,
-  ShoppingCart, Package, TrendingUp, Calendar, Hash,
+  ShoppingCart, Package, TrendingUp, Calendar, Hash, Wallet,
 } from "lucide-react";
 
 interface Profile {
@@ -36,9 +36,28 @@ interface EarningsData {
   weeks: WeekEarning[];
 }
 
+interface CashoutHistoryEntry {
+  id: string;
+  weekStartDate: string;
+  weekEndDate: string;
+  weeklySales: number;
+  commissionRate: number;
+  commissionAmount: number;
+  status: string;
+  paidAt: string | null;
+}
+
+const CASHOUT_STATUS_STYLE: Record<string, string> = {
+  PENDING: "bg-yellow-100 text-yellow-700",
+  APPROVED: "bg-blue-100 text-blue-700",
+  PAID: "bg-green-100 text-green-700",
+  REJECTED: "bg-red-100 text-red-700",
+};
+
 export default function ProfilePage() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [earnings, setEarnings] = useState<EarningsData | null>(null);
+  const [cashoutHistory, setCashoutHistory] = useState<CashoutHistoryEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [loggingOut, setLoggingOut] = useState(false);
   const router = useRouter();
@@ -47,9 +66,11 @@ export default function ProfilePage() {
     Promise.all([
       fetch("/api/employee/profile").then((r) => r.json()),
       fetch("/api/employee/earnings").then((r) => r.json()).catch(() => null),
-    ]).then(([profileData, earningsData]) => {
+      fetch("/api/employee/cashout").then((r) => r.json()).catch(() => null),
+    ]).then(([profileData, earningsData, cashoutData]) => {
       if (profileData.name) setProfile(profileData);
       if (earningsData && !earningsData.error) setEarnings(earningsData);
+      if (cashoutData?.history) setCashoutHistory(cashoutData.history);
     }).finally(() => setLoading(false));
   }, []);
 
@@ -218,6 +239,41 @@ export default function ProfilePage() {
                       <IndianRupee size={10} />
                       {week.salesAmount > 0 ? `₹${Math.round(week.salesAmount).toLocaleString("en-IN")} sales` : "₹0 sales"}
                     </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Cash-Out History */}
+        {cashoutHistory.length > 0 && (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+            <div className="px-4 pt-4 pb-3 border-b border-gray-50 flex items-center gap-2">
+              <div className="w-8 h-8 rounded-full bg-green-50 flex items-center justify-center shrink-0">
+                <Wallet size={15} className="text-green-600" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-gray-800">Cash-Out History</p>
+                <p className="text-xs text-gray-400">Weekly commission payout requests</p>
+              </div>
+            </div>
+            <div className="divide-y divide-gray-50">
+              {cashoutHistory.map((c) => (
+                <div key={c.id} className="px-4 py-3">
+                  <div className="flex items-center justify-between mb-1">
+                    <p className="text-sm font-medium text-gray-800">
+                      {new Date(c.weekStartDate).toLocaleDateString("en-IN", { day: "2-digit", month: "short" })}
+                      {" – "}
+                      {new Date(c.weekEndDate).toLocaleDateString("en-IN", { day: "2-digit", month: "short" })}
+                    </p>
+                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${CASHOUT_STATUS_STYLE[c.status] ?? "bg-gray-100 text-gray-600"}`}>
+                      {c.status}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-xs text-gray-400">
+                    <span>₹{Math.round(c.weeklySales).toLocaleString("en-IN")} sales · {c.commissionRate}%</span>
+                    <span className="font-semibold text-green-700 text-sm">₹{Math.round(c.commissionAmount).toLocaleString("en-IN")}</span>
                   </div>
                 </div>
               ))}

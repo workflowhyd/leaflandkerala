@@ -1,11 +1,18 @@
 import { prisma } from "@/lib/prisma";
 import type { Prisma, PrismaClient } from "@prisma/client";
 
-// Every employee earns a fixed commission rate — not admin-configurable.
-export const FIXED_COMMISSION_RATE = 30;
+// Fixed weekly commission slabs — not admin-configurable.
+const WEEKLY_COMMISSION_TIERS = [
+  { threshold: 40000, rate: 40 },
+  { threshold: 15000, rate: 35 },
+] as const;
+const BASE_COMMISSION_RATE = 30;
 
-export function getCommissionRate(_monthlySales: number): number {
-  return FIXED_COMMISSION_RATE;
+export function getCommissionRate(weeklySales: number): number {
+  for (const tier of WEEKLY_COMMISSION_TIERS) {
+    if (weeklySales >= tier.threshold) return tier.rate;
+  }
+  return BASE_COMMISSION_RATE;
 }
 
 export function getWeekRange(date: Date = new Date()) {
@@ -64,8 +71,10 @@ export async function recalculateEmployeeCommission(employeeId: string, client: 
   const monthlySales = Math.max(0, (monthOrders._sum.totalAmount ?? 0) - monthReturnsTotal);
   const weeklySales = Math.max(0, (weekOrders._sum.totalAmount ?? 0) - weekReturnsTotal);
 
-  const commissionRate = getCommissionRate(monthlySales);
-  const commissionAmount = (monthlySales * commissionRate) / 100;
+  // Commission is a weekly concept: rate is set by this week's slab, and the
+  // resulting amount is this week's cash-out-eligible commission.
+  const commissionRate = getCommissionRate(weeklySales);
+  const commissionAmount = (weeklySales * commissionRate) / 100;
 
   await client.employee.update({
     where: { id: employeeId },

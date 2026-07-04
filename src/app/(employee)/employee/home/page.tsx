@@ -2,7 +2,7 @@
 import { useEffect, useState, useCallback } from "react";
 import {
   Package, IndianRupee, Clock, Truck, CheckCircle, Circle,
-  ShoppingBag,
+  ShoppingBag, Wallet, X,
 } from "lucide-react";
 
 interface HomeData {
@@ -21,6 +21,25 @@ interface HomeData {
   lastPaymentAmount: number | null;
   lastPaymentRef: string | null;
 }
+
+interface CashoutEligibility {
+  weekStart: string;
+  weekEnd: string;
+  weeklySales: number;
+  commissionRate: number;
+  commissionAmount: number;
+  eligible: boolean;
+  reasons: string[];
+  alreadyRequested: boolean;
+  existingCashoutStatus: string | null;
+}
+
+const CASHOUT_STATUS_LABEL: Record<string, string> = {
+  PENDING: "Requested — Pending Review",
+  APPROVED: "Approved — Awaiting Payment",
+  PAID: "Paid",
+  REJECTED: "Rejected",
+};
 
 interface OfferItem {
   id: string;
@@ -126,18 +145,51 @@ function OffersBanner({
 export default function EmployeeHome() {
   const [data, setData] = useState<HomeData | null>(null);
   const [offersData, setOffersData] = useState<OffersData | null>(null);
+  const [cashout, setCashout] = useState<CashoutEligibility | null>(null);
   const [loading, setLoading] = useState(true);
   const [bannerDismissed, setBannerDismissed] = useState(false);
+  const [showCashoutConfirm, setShowCashoutConfirm] = useState(false);
+  const [requestingCashout, setRequestingCashout] = useState(false);
+  const [cashoutError, setCashoutError] = useState("");
+  const [cashoutSuccess, setCashoutSuccess] = useState(false);
+
+  const loadCashout = useCallback(() => {
+    return fetch("/api/employee/cashout")
+      .then((r) => r.json())
+      .then((d) => { if (d?.eligibility) setCashout(d.eligibility); })
+      .catch(() => null);
+  }, []);
 
   useEffect(() => {
     Promise.all([
       fetch("/api/employee/home").then((r) => r.json()),
       fetch("/api/employee/offers").then((r) => r.json()).catch(() => null),
+      loadCashout(),
     ]).then(([homeData, offers]) => {
       setData(homeData);
       if (offers && !offers.error) setOffersData(offers);
     }).finally(() => setLoading(false));
-  }, []);
+  }, [loadCashout]);
+
+  async function handleRequestCashout() {
+    setRequestingCashout(true);
+    setCashoutError("");
+    try {
+      const res = await fetch("/api/employee/cashout", { method: "POST" });
+      const result = await res.json();
+      if (res.ok) {
+        setShowCashoutConfirm(false);
+        setCashoutSuccess(true);
+        await loadCashout();
+      } else {
+        setCashoutError(result.error || "Failed to submit cash-out request.");
+      }
+    } catch {
+      setCashoutError("Network error. Please try again.");
+    } finally {
+      setRequestingCashout(false);
+    }
+  }
 
   const handleMarkNotified = useCallback(async (ids: string[]) => {
     for (const rewardId of ids) {
@@ -204,26 +256,98 @@ export default function EmployeeHome() {
         />
       )}
 
-      {/* Commission Summary */}
-      {data && (
+      {/* Cash-Out Status */}
+      {cashout && (
         <div className="mx-4 mt-4 rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
-              <IndianRupee size={16} className="text-green-600" />
-              <p className="text-sm font-semibold text-gray-700">Commission Summary</p>
+              <Wallet size={16} className="text-green-600" />
+              <p className="text-sm font-semibold text-gray-700">Cash-Out Status</p>
             </div>
             <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-700">
-              {data.commissionRate}% rate
+              {cashout.commissionRate}% rate
             </span>
           </div>
-          <div className="grid grid-cols-2 gap-3">
+
+          <div className="grid grid-cols-2 gap-3 mb-3">
             <div>
-              <p className="text-xs text-gray-400">Current Sales</p>
-              <p className="text-lg font-bold text-gray-800">₹{Math.round(data.monthlySales).toLocaleString("en-IN")}</p>
+              <p className="text-xs text-gray-400">Weekly Sales</p>
+              <p className="text-lg font-bold text-gray-800">₹{Math.round(cashout.weeklySales).toLocaleString("en-IN")}</p>
             </div>
             <div>
               <p className="text-xs text-gray-400">Commission Earned</p>
-              <p className="text-lg font-bold text-green-700">₹{Math.round(data.commissionAmount).toLocaleString("en-IN")}</p>
+              <p className="text-lg font-bold text-green-700">₹{Math.round(cashout.commissionAmount).toLocaleString("en-IN")}</p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1.5 mb-2">
+            <span>{cashout.eligible ? "🟢" : "🔴"}</span>
+            <span className={`text-sm font-semibold ${cashout.eligible ? "text-green-700" : "text-gray-500"}`}>
+              {cashout.eligible
+                ? "Eligible"
+                : cashout.alreadyRequested
+                ? CASHOUT_STATUS_LABEL[cashout.existingCashoutStatus ?? "PENDING"]
+                : "Not Eligible Yet"}
+            </span>
+          </div>
+
+          {!cashout.eligible && cashout.reasons.length > 0 && (
+            <ul className="text-xs text-gray-400 mb-2 space-y-0.5">
+              {cashout.reasons.map((r, i) => <li key={i}>• {r}</li>)}
+            </ul>
+          )}
+
+          {cashout.eligible && (
+            <p className="text-sm text-gray-600 mb-3">
+              Cash-Out Available: <span className="font-bold text-green-700">₹{Math.round(cashout.commissionAmount).toLocaleString("en-IN")}</span>
+            </p>
+          )}
+
+          {cashoutSuccess && (
+            <div className="mb-3 rounded-lg bg-green-50 border border-green-100 px-3 py-2 text-xs text-green-700">
+              Cash-out request submitted successfully.
+            </div>
+          )}
+          {cashoutError && (
+            <div className="mb-3 rounded-lg bg-red-50 border border-red-100 px-3 py-2 text-xs text-red-600">
+              {cashoutError}
+            </div>
+          )}
+
+          <button
+            disabled={!cashout.eligible}
+            onClick={() => setShowCashoutConfirm(true)}
+            className="w-full bg-green-600 disabled:bg-gray-100 disabled:text-gray-400 text-white py-3 rounded-xl font-semibold text-sm transition-colors"
+          >
+            Request Cash-Out
+          </button>
+          {!cashout.eligible && !cashout.alreadyRequested && (
+            <p className="text-xs text-gray-400 mt-2 text-center">Complete all deliveries before requesting cash-out.</p>
+          )}
+        </div>
+      )}
+
+      {/* Cash-out confirmation modal */}
+      {showCashoutConfirm && cashout && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 px-4 pb-4 sm:pb-0">
+          <div className="w-full max-w-sm bg-white rounded-2xl p-5 shadow-xl">
+            <div className="flex items-center justify-between mb-3">
+              <p className="font-semibold text-gray-800">Confirm Cash-Out</p>
+              <button onClick={() => setShowCashoutConfirm(false)}><X size={18} className="text-gray-400" /></button>
+            </div>
+            <p className="text-sm text-gray-600 mb-4">
+              Are you sure you want to request this week&apos;s commission payout of{" "}
+              <span className="font-bold text-green-700">₹{Math.round(cashout.commissionAmount).toLocaleString("en-IN")}</span>?
+            </p>
+            <div className="flex gap-3">
+              <button onClick={() => setShowCashoutConfirm(false)} disabled={requestingCashout}
+                className="flex-1 border border-gray-200 text-gray-600 py-2.5 rounded-xl font-medium text-sm">
+                Cancel
+              </button>
+              <button onClick={handleRequestCashout} disabled={requestingCashout}
+                className="flex-1 bg-green-600 text-white py-2.5 rounded-xl font-semibold text-sm disabled:opacity-60">
+                {requestingCashout ? "Submitting..." : "Confirm"}
+              </button>
             </div>
           </div>
         </div>

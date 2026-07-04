@@ -12,7 +12,7 @@ export async function GET() {
   const last24h = new Date(now.getTime() - 24 * 60 * 60 * 1000);
   const last48h = new Date(now.getTime() - 48 * 60 * 60 * 1000);
 
-  const [pendingRegistrations, newOrders, outForDelivery, lowStock, pendingReturns] = await Promise.all([
+  const [pendingRegistrations, newOrders, outForDelivery, lowStock, pendingReturns, pendingCashouts] = await Promise.all([
     prisma.employeeRegistrationRequest.findMany({
       where: { status: "PENDING" },
       orderBy: { submittedAt: "desc" },
@@ -35,6 +35,12 @@ export async function GET() {
       where: { status: "PENDING" },
       include: { customer: { select: { name: true } }, order: { select: { orderNumber: true } } },
       orderBy: { createdAt: "desc" },
+      take: 10,
+    }),
+    prisma.employeeCashout.findMany({
+      where: { status: "PENDING" },
+      include: { employee: { select: { name: true } } },
+      orderBy: { requestedAt: "desc" },
       take: 10,
     }),
   ]);
@@ -99,12 +105,26 @@ export async function GET() {
     });
   }
 
+  for (const cashout of pendingCashouts) {
+    const weekLabel = `${cashout.weekStartDate.toLocaleDateString("en-IN", { day: "2-digit", month: "short" })} – ${cashout.weekEndDate.toLocaleDateString("en-IN", { day: "2-digit", month: "short" })}`;
+    items.push({
+      id: `cashout-${cashout.id}`,
+      type: "CASHOUT_REQUEST",
+      title: "New Cash-Out Request",
+      body: `${cashout.employee.name} — ${weekLabel} — ₹${cashout.commissionAmount.toLocaleString("en-IN")}`,
+      createdAt: cashout.requestedAt.toISOString(),
+      href: `/dashboard/cashouts`,
+      urgent: true,
+    });
+  }
+
   items.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
   return NextResponse.json({
-    totalCount: pendingRegistrations.length + newOrders.length + pendingReturns.length,
+    totalCount: pendingRegistrations.length + newOrders.length + pendingReturns.length + pendingCashouts.length,
     pendingRegistrations: pendingRegistrations.length,
     pendingReturns: pendingReturns.length,
+    pendingCashouts: pendingCashouts.length,
     lowStockCount: lowStock,
     items,
   });

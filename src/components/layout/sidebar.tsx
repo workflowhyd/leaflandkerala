@@ -19,6 +19,7 @@ import {
   CalendarRange,
   ClipboardCheck,
   Undo2,
+  Wallet,
 } from "lucide-react";
 
 interface NavItem {
@@ -37,9 +38,10 @@ interface SidebarProps {
   isMobile?: boolean;
   notificationCount?: number;
   pendingReturnsCount?: number;
+  pendingCashoutsCount?: number;
 }
 
-export function Sidebar({ userRole, userName, onLogout, onClose, isMobile, notificationCount = 0, pendingReturnsCount = 0 }: SidebarProps) {
+export function Sidebar({ userRole, userName, onLogout, onClose, isMobile, notificationCount = 0, pendingReturnsCount = 0, pendingCashoutsCount = 0 }: SidebarProps) {
   const pathname = usePathname();
 
   const navItems: NavItem[] = [
@@ -62,6 +64,13 @@ export function Sidebar({ userRole, userName, onLogout, onClose, isMobile, notif
       icon: Undo2,
       adminOnly: true,
       badge: pendingReturnsCount > 0 ? pendingReturnsCount : undefined,
+    },
+    {
+      label: "Cash-Out Requests",
+      href: "/dashboard/cashouts",
+      icon: Wallet,
+      adminOnly: true,
+      badge: pendingCashoutsCount > 0 ? pendingCashoutsCount : undefined,
     },
     { label: "Reports",       href: "/dashboard/reports",       icon: BarChart3, adminOnly: true },
     {

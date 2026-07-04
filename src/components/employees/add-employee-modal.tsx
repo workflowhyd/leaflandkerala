@@ -301,7 +301,7 @@ export function AddEmployeeModal({ open, onClose, onSuccess }: AddEmployeeModalP
           />
         </div>
         <p className="text-xs text-[#94a3b8] -mt-2">
-          Commission is fixed at 30% for every employee and calculated automatically — not editable here.
+          Commission is calculated automatically from weekly sales (30% / 35% / 40% slabs) — not editable here.
         </p>
 
         {/* Government ID */}

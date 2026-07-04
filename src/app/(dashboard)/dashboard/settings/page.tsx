@@ -458,12 +458,14 @@ export default function SettingsPage() {
           <CardContent>
             <div className="flex flex-col gap-6 max-w-md">
               <div>
-                <p className="text-sm font-semibold text-[#1a1a1a] mb-1">Fixed Commission Rate</p>
+                <p className="text-sm font-semibold text-[#1a1a1a] mb-1">Weekly Commission Slabs</p>
                 <p className="text-xs text-[#64748b] mb-3">
-                  Commission is calculated automatically for every employee — this is not configurable from the admin panel.
+                  Commission is calculated automatically from each employee&apos;s weekly sales — this is not configurable from the admin panel.
                 </p>
-                <div className="rounded-md bg-[#1E4D3D]/5 px-4 py-3 text-sm text-[#1E4D3D]">
-                  Every employee earns a flat <strong>30%</strong> commission on their eligible sales.
+                <div className="rounded-md bg-[#1E4D3D]/5 px-4 py-3 text-sm text-[#1E4D3D] space-y-1">
+                  <p>Weekly sales below <strong>₹15,000</strong> → <strong>30%</strong> commission</p>
+                  <p>Weekly sales <strong>₹15,000–₹39,999</strong> → <strong>35%</strong> commission</p>
+                  <p>Weekly sales <strong>₹40,000+</strong> → <strong>40%</strong> commission</p>
                 </div>
               </div>
 

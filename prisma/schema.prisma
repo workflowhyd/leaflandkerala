@@ -76,6 +76,15 @@ enum ActivityType {
   RETURN_CREATE
   RETURN_STATUS_CHANGE
   DELIVERY_CLEANUP
+  CASHOUT_REQUEST
+  CASHOUT_STATUS_CHANGE
+}
+
+enum CashoutStatus {
+  PENDING
+  APPROVED
+  PAID
+  REJECTED
 }
 
 enum OfferType {
@@ -168,6 +177,7 @@ model Employee {
   rewards           EmployeeReward[]
   payments          EmployeePayment[]
   returns           Return[]
+  cashouts          EmployeeCashout[]
 
   @@index([governmentIdNumber])
 }
@@ -428,6 +438,31 @@ model EmployeePayment {
 
   employee    Employee     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
   commissions Commission[]
+}
+
+// Employee-initiated weekly commission cash-out request — separate from the
+// admin-driven EmployeePayment batch payout system above.
+model EmployeeCashout {
+  id               String        @id @default(cuid())
+  employeeId       String
+  weekStartDate    DateTime
+  weekEndDate      DateTime
+  weeklySales      Float
+  commissionRate   Float
+  commissionAmount Float
+  requestedAt      DateTime      @default(now())
+  approvedAt       DateTime?
+  paidAt           DateTime?
+  status           CashoutStatus @default(PENDING)
+  adminNotes       String?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([employeeId, weekStartDate])
+  @@index([status])
+  @@index([weekStartDate])
 }
 
 model ActivityLog {

@@ -19,6 +19,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/dashboard/employees": "Employees",
   "/dashboard/approvals": "Employee Approvals",
   "/dashboard/returns": "Returns",
+  "/dashboard/cashouts": "Cash-Out Requests",
   "/dashboard/reports": "Reports",
   "/dashboard/settings": "Settings",
   "/dashboard/notifications": "Notifications",
@@ -50,6 +51,7 @@ export function DashboardClientShell({
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [notificationCount, setNotificationCount] = useState(0);
   const [pendingReturnsCount, setPendingReturnsCount] = useState(0);
+  const [pendingCashoutsCount, setPendingCashoutsCount] = useState(0);
 
   const pageTitle = getPageTitle(pathname);
 
@@ -62,6 +64,7 @@ export function DashboardClientShell({
         .then((d) => {
           if (d?.pendingRegistrations !== undefined) setNotificationCount(d.pendingRegistrations);
           if (d?.pendingReturns !== undefined) setPendingReturnsCount(d.pendingReturns);
+          if (d?.pendingCashouts !== undefined) setPendingCashoutsCount(d.pendingCashouts);
         })
         .catch(() => {});
     };
@@ -118,6 +121,7 @@ export function DashboardClientShell({
             onLogout={handleLogout}
             notificationCount={notificationCount}
             pendingReturnsCount={pendingReturnsCount}
+            pendingCashoutsCount={pendingCashoutsCount}
           />
         </div>
 
@@ -141,6 +145,7 @@ export function DashboardClientShell({
                 isMobile
                 notificationCount={notificationCount}
                 pendingReturnsCount={pendingReturnsCount}
+                pendingCashoutsCount={pendingCashoutsCount}
               />
             </div>
           </div>
