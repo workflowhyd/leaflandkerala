@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState, useCallback, useRef, Suspense } from "react";
+import { useEffect, useState, useRef, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import {
   ArrowLeft, Plus, Minus, Search, Trash2, MapPin, CheckCircle,
@@ -10,6 +10,10 @@ import { useCart, CartItem } from "@/components/employee/cart-context";
 import { compressImageToTarget, ImageTooLargeError } from "@/lib/compress-image";
 import { getCategoryMeta } from "@/lib/category-images";
 import { cloudinaryThumb } from "@/lib/image-thumb";
+import { uploadHousePhoto } from "@/lib/api/orders";
+import { useOrdersList, useProductSearch, usePlaceOrder } from "@/hooks/use-employee-orders";
+import { useCustomerSearch, useCreateCustomer } from "@/hooks/use-employee-customers";
+import { useFreeGift } from "@/hooks/use-employee-home";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -132,15 +136,11 @@ function OrdersPageContent() {
   const { items: cartItems, addItem, removeItem, setQuantity, clearCart, total, itemCount } = useCart();
 
   const [step, setStep] = useState<Step>(searchParams.get("new") === "1" ? "products" : "list");
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [loadingOrders, setLoadingOrders] = useState(false);
   const [productQuery, setProductQuery] = useState("");
-  const [products, setProducts] = useState<Product[]>([]);
-  const [searchingProducts, setSearchingProducts] = useState(false);
+  const [debouncedProductQuery, setDebouncedProductQuery] = useState("");
   const [customerQuery, setCustomerQuery] = useState("");
-  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [debouncedCustomerQuery, setDebouncedCustomerQuery] = useState("");
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
-  const [searchingCustomers, setSearchingCustomers] = useState(false);
   const [showNewCustomer, setShowNewCustomer] = useState(false);
   const [newCustomer, setNewCustomer] = useState({ name: "", mobile: "", address: "", village: "", district: "", pincode: "" });
   const [notes, setNotes] = useState("");
@@ -155,7 +155,6 @@ function OrdersPageContent() {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
   const [placedOrder, setPlacedOrder] = useState<PlacedOrder | null>(null);
-  const [freeGift, setFreeGift] = useState<{ enabled: boolean; productName: string; minAmount: number } | null>(null);
 
   const productTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const customerTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -169,46 +168,34 @@ function OrdersPageContent() {
     return () => window.removeEventListener("online", handler);
   }, []);
 
-  useEffect(() => {
-    fetch("/api/employee/free-gift").then((r) => r.ok ? r.json() : null).then((d) => { if (d) setFreeGift(d); }).catch(() => {});
-  }, []);
+  const { data: freeGift } = useFreeGift();
+  const ordersQuery = useOrdersList("week", step === "list");
+  const orders = ordersQuery.data ?? [];
+  const loadingOrders = ordersQuery.isFetching;
 
-  const loadOrders = useCallback(async () => {
-    setLoadingOrders(true);
-    try {
-      const res = await fetch("/api/employee/orders?view=week");
-      if (res.ok) setOrders(await res.json());
-    } finally {
-      setLoadingOrders(false);
-    }
-  }, []);
+  const productSearchQuery = useProductSearch(debouncedProductQuery);
+  const products = productSearchQuery.data ?? [];
+  const searchingProducts = productSearchQuery.isFetching;
 
-  useEffect(() => { if (step === "list") loadOrders(); }, [step, loadOrders]);
+  const customerSearchEnabled = step === "customer" && debouncedCustomerQuery.length > 0;
+  const customerSearchQuery = useCustomerSearch(debouncedCustomerQuery, customerSearchEnabled);
+  const customers = customerSearchQuery.data ?? [];
+  const searchingCustomers = customerSearchQuery.isFetching;
+
+  const placeOrderMutation = usePlaceOrder();
+  const createCustomerMutation = useCreateCustomer();
 
   useEffect(() => {
     if (productTimer.current) clearTimeout(productTimer.current);
-    productTimer.current = setTimeout(async () => {
-      setSearchingProducts(true);
-      try {
-        const res = await fetch(`/api/employee/products?q=${encodeURIComponent(productQuery)}`);
-        if (res.ok) setProducts(await res.json());
-      } finally { setSearchingProducts(false); }
-    }, 250);
+    productTimer.current = setTimeout(() => setDebouncedProductQuery(productQuery), 250);
     return () => { if (productTimer.current) clearTimeout(productTimer.current); };
   }, [productQuery]);
 
   useEffect(() => {
-    if (!customerQuery || step !== "customer") return;
     if (customerTimer.current) clearTimeout(customerTimer.current);
-    customerTimer.current = setTimeout(async () => {
-      setSearchingCustomers(true);
-      try {
-        const res = await fetch(`/api/employee/customers?q=${encodeURIComponent(customerQuery)}`);
-        if (res.ok) setCustomers(await res.json());
-      } finally { setSearchingCustomers(false); }
-    }, 250);
+    customerTimer.current = setTimeout(() => setDebouncedCustomerQuery(customerQuery), 250);
     return () => { if (customerTimer.current) clearTimeout(customerTimer.current); };
-  }, [customerQuery, step]);
+  }, [customerQuery]);
 
   function captureGPS() {
     if (!navigator.geolocation) {
@@ -256,41 +243,24 @@ function OrdersPageContent() {
     }
   }
 
-  async function uploadHousePhoto(customerId: string, orderId: string, data: string, attempt = 0): Promise<boolean> {
+  async function submitHousePhoto(customerId: string, orderId: string, data: string) {
     setPhotoUploadStatus("uploading");
-    try {
-      const res = await fetch(`/api/employee/customers/${customerId}/photos`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ imageData: data, isFront: false, orderId }),
-      });
-      if (!res.ok) throw new Error("Upload failed");
-      setPhotoUploadStatus("success");
-      return true;
-    } catch {
-      if (attempt < 2) {
-        await new Promise((r) => setTimeout(r, 800 * (attempt + 1)));
-        return uploadHousePhoto(customerId, orderId, data, attempt + 1);
-      }
-      setPhotoUploadStatus("error");
-      return false;
-    }
+    const ok = await uploadHousePhoto(customerId, orderId, data);
+    setPhotoUploadStatus(ok ? "success" : "error");
   }
 
   async function handleCreateCustomer() {
     const { name, mobile, address, district, pincode } = newCustomer;
     if (!name || !mobile || !address || !district || !pincode) return;
-    const res = await fetch("/api/employee/customers", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(newCustomer),
-    });
-    if (res.ok || res.status === 409) {
-      const data = await res.json();
-      setSelectedCustomer(data.customer ?? data);
+    try {
+      const customer = await createCustomerMutation.mutateAsync(newCustomer);
+      setSelectedCustomer(customer);
       setShowNewCustomer(false);
       setGps(null);
       setGpsError(null);
       setStep("gps");
+    } catch {
+      // Keep the form open; createCustomerMutation.error can be surfaced by the form if needed.
     }
   }
 
@@ -314,37 +284,23 @@ function OrdersPageContent() {
     };
 
     try {
-      const res = await fetch("/api/employee/orders", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
+      const data = await placeOrderMutation.mutateAsync(payload);
+      setPlacedOrder(data);
+      clearCart();
 
-      if (res.ok) {
-        const data: PlacedOrder = await res.json();
-        setPlacedOrder(data);
-        clearCart();
-
-        // Upload the house photo — awaited with retries so a failure is never silent.
-        if (photoData && selectedCustomer) {
-          await uploadHousePhoto(selectedCustomer.id, data.id, photoData);
-        }
-
-        setStep("success");
-      } else if (!navigator.onLine) {
-        enqueueOrder(payload);
-        clearCart();
-        setStep("list");
-      } else {
-        const data = await res.json().catch(() => ({}));
-        setSubmitError(data.error ?? "Failed to submit. Please try again.");
+      // Upload the house photo — awaited with retries so a failure is never silent.
+      if (photoData && selectedCustomer) {
+        await submitHousePhoto(selectedCustomer.id, data.id, photoData);
       }
-    } catch {
+
+      setStep("success");
+    } catch (err) {
       if (!navigator.onLine) {
         enqueueOrder(payload);
         clearCart();
         setStep("list");
       } else {
-        setSubmitError("Connection error. Please check your internet and try again.");
+        setSubmitError(err instanceof Error ? err.message : "Connection error. Please check your internet and try again.");
       }
     } finally {
       setSubmitting(false);
@@ -376,7 +332,7 @@ function OrdersPageContent() {
       onDone={resetFlow}
       photoUploadStatus={photoData ? photoUploadStatus : "idle"}
       onRetryPhoto={() => {
-        if (photoData && selectedCustomer) uploadHousePhoto(selectedCustomer.id, placedOrder.id, photoData);
+        if (photoData && selectedCustomer) submitHousePhoto(selectedCustomer.id, placedOrder.id, photoData);
       }}
     />
   );

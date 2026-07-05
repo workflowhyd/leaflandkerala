@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import {
   Plus, Search, Download, Eye, RefreshCw, XCircle,
@@ -193,6 +193,7 @@ export default function OrdersPage() {
   const [stats, setStats] = useState<OrderStats>({ total: 0, NEW: 0, PROCESSING: 0, DELIVERED: 0, CANCELLED: 0 });
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [status, setStatus] = useState("");
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -201,32 +202,27 @@ export default function OrdersPage() {
   const [cancelOrder, setCancelOrder] = useState<Order | null>(null);
   const [cancelLoading, setCancelLoading] = useState(false);
 
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    searchTimer.current = setTimeout(() => setDebouncedSearch(search), 300);
+    return () => { if (searchTimer.current) clearTimeout(searchTimer.current); };
+  }, [search]);
+
   const fetchOrders = useCallback(async () => {
     setLoading(true);
     const params = new URLSearchParams({ page: String(page), limit: "20" });
-    if (search) params.set("search", search);
+    if (debouncedSearch) params.set("search", debouncedSearch);
     if (status) params.set("status", status);
     const res = await fetch(`/api/orders?${params}`);
     if (res.ok) {
       const data = await res.json();
       setOrders(data.orders);
       setTotal(data.total);
-
-      const allRes = await fetch("/api/orders?limit=1000");
-      if (allRes.ok) {
-        const allData = await allRes.json();
-        const all: Order[] = allData.orders;
-        setStats({
-          total: allData.total,
-          NEW: all.filter((o) => o.status === "NEW").length,
-          PROCESSING: all.filter((o) => o.status === "PROCESSING").length,
-          DELIVERED: all.filter((o) => o.status === "DELIVERED").length,
-          CANCELLED: all.filter((o) => o.status === "CANCELLED").length,
-        });
-      }
+      if (data.counts) setStats(data.counts);
     }
     setLoading(false);
-  }, [page, search, status]);
+  }, [page, debouncedSearch, status]);
 
   useEffect(() => { fetchOrders(); }, [fetchOrders]);
 

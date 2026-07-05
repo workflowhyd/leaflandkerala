@@ -1,43 +1,25 @@
 "use client";
-import { useEffect, useState, useCallback, useRef, Suspense } from "react";
+import { useEffect, useState, useRef, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   ArrowLeft, Plus, Search, ChevronRight, Check, X, AlertCircle,
   CheckCircle, Minus, PackageX, Undo2,
 } from "lucide-react";
+import { useMyReturns, useReturnOrderDetail, useReturnableOrders, useSubmitReturn } from "@/hooks/use-employee-returns";
+import { useCustomerSearch } from "@/hooks/use-employee-customers";
+import type { CustomerOrder, ReturnEligibleItem } from "@/lib/api/returns";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
+// Deliberately narrower than CustomerSearchResult: the order-detail endpoint's
+// embedded customer only ever has {id, name, mobile}, so selectedCustomer must
+// stay assignable from either source.
 interface Customer {
   id: string; name: string; mobile: string; village?: string | null; district?: string;
 }
 
-interface CustomerOrder {
-  id: string; orderNumber: string; createdAt: string; deliveryDate: string | null;
-  totalAmount: number; status: string;
-}
-
-interface ReturnEligibleItem {
-  orderItemId: string; productId: string; name: string; serialNumber: number;
-  sku: string; orderedQuantity: number; returnableQuantity: number;
-}
-
-interface OrderDetail {
-  id: string; orderNumber: string; createdAt: string; deliveryDate: string | null;
-  totalAmount: number; status: string;
-  customer: { id: string; name: string; mobile: string };
-  items: ReturnEligibleItem[];
-}
-
 interface SelectedItem extends ReturnEligibleItem {
   quantity: number;
-}
-
-interface MyReturn {
-  id: string; returnNumber: string; status: string; reason: string; createdAt: string;
-  order: { orderNumber: string };
-  customer: { name: string; mobile: string };
-  items: { quantity: number; product: { name: string } }[];
 }
 
 type Step = "list" | "customer" | "orders" | "items" | "reason" | "confirm" | "success";
@@ -113,18 +95,27 @@ function ReturnsPageContent() {
 
   const [step, setStep] = useState<Step>(prefillOrderId ? "items" : "list");
 
-  const [myReturns, setMyReturns] = useState<MyReturn[]>([]);
-  const [loadingReturns, setLoadingReturns] = useState(false);
+  const myReturnsQuery = useMyReturns(step === "list");
+  const myReturns = myReturnsQuery.data ?? [];
+  const loadingReturns = myReturnsQuery.isFetching;
 
   const [customerQuery, setCustomerQuery] = useState("");
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [searchingCustomers, setSearchingCustomers] = useState(false);
+  const [debouncedCustomerQuery, setDebouncedCustomerQuery] = useState("");
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
 
-  const [orders, setOrders] = useState<CustomerOrder[]>([]);
-  const [loadingOrders, setLoadingOrders] = useState(false);
-  const [selectedOrder, setSelectedOrder] = useState<OrderDetail | null>(null);
-  const [loadingOrderDetail, setLoadingOrderDetail] = useState(false);
+  const customerSearchQuery = useCustomerSearch(debouncedCustomerQuery, step === "customer" && debouncedCustomerQuery.length > 0);
+  const customers = customerSearchQuery.data ?? [];
+  const searchingCustomers = customerSearchQuery.isFetching;
+
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
+  const ordersForCustomerQuery = useReturnableOrders(selectedCustomerId);
+  const orders = ordersForCustomerQuery.data ?? [];
+  const loadingOrders = ordersForCustomerQuery.isFetching;
+
+  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(prefillOrderId);
+  const orderDetailQuery = useReturnOrderDetail(selectedOrderId);
+  const selectedOrder = orderDetailQuery.data ?? null;
+  const loadingOrderDetail = orderDetailQuery.isFetching;
 
   const [selectedItems, setSelectedItems] = useState<Record<string, SelectedItem>>({});
 
@@ -132,83 +123,37 @@ function ReturnsPageContent() {
   const [reasonNotes, setReasonNotes] = useState("");
   const [notes, setNotes] = useState("");
 
-  const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
   const [createdReturn, setCreatedReturn] = useState<{ returnNumber: string } | null>(null);
+  const submitReturnMutation = useSubmitReturn();
+  const submitting = submitReturnMutation.isPending;
 
   const customerTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const loadMyReturns = useCallback(async () => {
-    setLoadingReturns(true);
-    try {
-      const res = await fetch("/api/employee/returns");
-      if (res.ok) setMyReturns(await res.json());
-    } finally {
-      setLoadingReturns(false);
-    }
-  }, []);
-
-  useEffect(() => { if (step === "list") loadMyReturns(); }, [step, loadMyReturns]);
+  useEffect(() => {
+    if (customerTimer.current) clearTimeout(customerTimer.current);
+    customerTimer.current = setTimeout(() => setDebouncedCustomerQuery(customerQuery), 250);
+    return () => { if (customerTimer.current) clearTimeout(customerTimer.current); };
+  }, [customerQuery]);
 
   // Deep link from the Delivery screen — jump straight to item selection for this order.
   useEffect(() => {
-    if (!prefillOrderId) return;
-    (async () => {
-      setLoadingOrderDetail(true);
-      try {
-        const res = await fetch(`/api/employee/returns/orders/${prefillOrderId}`);
-        if (res.ok) {
-          const detail: OrderDetail = await res.json();
-          setSelectedOrder(detail);
-          setSelectedCustomer(detail.customer);
-          setSelectedItems({});
-        }
-      } finally {
-        setLoadingOrderDetail(false);
-      }
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-    })();
-  }, [prefillOrderId]);
-
-  useEffect(() => {
-    if (!customerQuery || step !== "customer") return;
-    if (customerTimer.current) clearTimeout(customerTimer.current);
-    customerTimer.current = setTimeout(async () => {
-      setSearchingCustomers(true);
-      try {
-        const res = await fetch(`/api/employee/customers?q=${encodeURIComponent(customerQuery)}`);
-        if (res.ok) setCustomers(await res.json());
-      } finally { setSearchingCustomers(false); }
-    }, 250);
-    return () => { if (customerTimer.current) clearTimeout(customerTimer.current); };
-  }, [customerQuery, step]);
-
-  async function handleSelectCustomer(customer: Customer) {
-    setSelectedCustomer(customer);
-    setOrders([]);
-    setLoadingOrders(true);
-    setStep("orders");
-    try {
-      const res = await fetch(`/api/employee/returns/orders?customerId=${customer.id}`);
-      if (res.ok) setOrders(await res.json());
-    } finally {
-      setLoadingOrders(false);
+    if (selectedOrder && prefillOrderId && selectedOrder.id === prefillOrderId) {
+      setSelectedCustomer(selectedOrder.customer);
+      setSelectedItems({});
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedOrder]);
+
+  function handleSelectCustomer(customer: Customer) {
+    setSelectedCustomer(customer);
+    setSelectedCustomerId(customer.id);
+    setStep("orders");
   }
 
-  async function handleSelectOrder(order: CustomerOrder) {
-    setLoadingOrderDetail(true);
+  function handleSelectOrder(order: CustomerOrder) {
+    setSelectedOrderId(order.id);
+    setSelectedItems({});
     setStep("items");
-    try {
-      const res = await fetch(`/api/employee/returns/orders/${order.id}`);
-      if (res.ok) {
-        const detail: OrderDetail = await res.json();
-        setSelectedOrder(detail);
-        setSelectedItems({});
-      }
-    } finally {
-      setLoadingOrderDetail(false);
-    }
   }
 
   function toggleItem(item: ReturnEligibleItem) {
@@ -236,43 +181,31 @@ function ReturnsPageContent() {
 
   async function handleSubmit() {
     if (!selectedOrder || !selectedList.length || !reason) return;
-    setSubmitting(true);
     setSubmitError("");
     try {
-      const res = await fetch("/api/employee/returns", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          orderId: selectedOrder.id,
-          items: selectedList.map((i) => ({
-            orderItemId: i.orderItemId,
-            productId: i.productId,
-            quantity: i.quantity,
-          })),
-          reason,
-          reasonNotes: reason === "OTHER" ? reasonNotes : undefined,
-          notes: notes || undefined,
-        }),
+      const data = await submitReturnMutation.mutateAsync({
+        orderId: selectedOrder.id,
+        items: selectedList.map((i) => ({
+          orderItemId: i.orderItemId,
+          productId: i.productId,
+          quantity: i.quantity,
+        })),
+        reason,
+        reasonNotes: reason === "OTHER" ? reasonNotes : undefined,
+        notes: notes || undefined,
       });
-      const data = await res.json();
-      if (res.ok) {
-        setCreatedReturn({ returnNumber: data.returnNumber });
-        setStep("success");
-      } else {
-        setSubmitError(data.error || "Failed to submit return. Please try again.");
-      }
-    } catch {
-      setSubmitError("Connection error. Please check your internet and try again.");
-    } finally {
-      setSubmitting(false);
+      setCreatedReturn({ returnNumber: data.returnNumber });
+      setStep("success");
+    } catch (err) {
+      setSubmitError(err instanceof Error ? err.message : "Connection error. Please check your internet and try again.");
     }
   }
 
   function resetFlow() {
     setStep("list");
     setSelectedCustomer(null);
-    setOrders([]);
-    setSelectedOrder(null);
+    setSelectedCustomerId(null);
+    setSelectedOrderId(null);
     setSelectedItems({});
     setReason("");
     setReasonNotes("");
@@ -280,7 +213,7 @@ function ReturnsPageContent() {
     setSubmitError("");
     setCreatedReturn(null);
     setCustomerQuery("");
-    setCustomers([]);
+    setDebouncedCustomerQuery("");
   }
 
   // ─── Step: list ───────────────────────────────────────────────────────────

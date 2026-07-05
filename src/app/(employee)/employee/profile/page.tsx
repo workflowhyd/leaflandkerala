@@ -1,51 +1,13 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   LogOut, User, Mail, MapPin, Percent, Phone, IndianRupee,
   ShoppingCart, Package, TrendingUp, Calendar, Hash, Wallet,
 } from "lucide-react";
-
-interface Profile {
-  name: string;
-  email: string;
-  role: string;
-  employee?: {
-    id?: string;
-    territory?: string | null;
-    commissionPercent: number;
-    mobile?: string | null;
-    address?: string | null;
-    isActive?: boolean;
-    createdAt?: string;
-  };
-}
-
-interface WeekEarning {
-  label: string;
-  weekStart: string;
-  weekEnd: string;
-  ordersDelivered: number;
-  salesAmount: number;
-  productsDelivered: number;
-  earnings: number;
-}
-
-interface EarningsData {
-  commissionPercent: number;
-  weeks: WeekEarning[];
-}
-
-interface CashoutHistoryEntry {
-  id: string;
-  weekStartDate: string;
-  weekEndDate: string;
-  weeklySales: number;
-  commissionRate: number;
-  commissionAmount: number;
-  status: string;
-  paidAt: string | null;
-}
+import { useProfile, useEarnings } from "@/hooks/use-employee-profile";
+import { useCashoutHistory } from "@/hooks/use-employee-home";
 
 const CASHOUT_STATUS_STYLE: Record<string, string> = {
   PENDING: "bg-yellow-100 text-yellow-700",
@@ -55,28 +17,24 @@ const CASHOUT_STATUS_STYLE: Record<string, string> = {
 };
 
 export default function ProfilePage() {
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [earnings, setEarnings] = useState<EarningsData | null>(null);
-  const [cashoutHistory, setCashoutHistory] = useState<CashoutHistoryEntry[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [loggingOut, setLoggingOut] = useState(false);
   const router = useRouter();
+  const queryClient = useQueryClient();
 
-  useEffect(() => {
-    Promise.all([
-      fetch("/api/employee/profile").then((r) => r.json()),
-      fetch("/api/employee/earnings").then((r) => r.json()).catch(() => null),
-      fetch("/api/employee/cashout").then((r) => r.json()).catch(() => null),
-    ]).then(([profileData, earningsData, cashoutData]) => {
-      if (profileData.name) setProfile(profileData);
-      if (earningsData && !earningsData.error) setEarnings(earningsData);
-      if (cashoutData?.history) setCashoutHistory(cashoutData.history);
-    }).finally(() => setLoading(false));
-  }, []);
+  const profileQuery = useProfile();
+  const earningsQuery = useEarnings();
+  const cashoutHistoryQuery = useCashoutHistory();
+
+  const profile = profileQuery.data;
+  const earnings = earningsQuery.data;
+  const cashoutHistory = cashoutHistoryQuery.data ?? [];
+  const loading = profileQuery.isPending || earningsQuery.isPending || cashoutHistoryQuery.isPending;
+
+  const [loggingOut, setLoggingOut] = useState(false);
 
   async function handleLogout() {
     setLoggingOut(true);
     await fetch("/api/auth/logout", { method: "POST" });
+    queryClient.clear();
     localStorage.removeItem("employee_cart");
     localStorage.removeItem("employee_order_queue");
     router.replace("/login");

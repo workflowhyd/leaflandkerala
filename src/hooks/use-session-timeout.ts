@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 
 const INACTIVITY_MS = 15 * 60 * 1000; // 15 min before warning
 const WARNING_MS    =  2 * 60 * 1000; // 2 min countdown after warning
@@ -11,6 +12,7 @@ const ACTIVITY_EVENTS = [
 
 export function useSessionTimeout() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [showWarning, setShowWarning] = useState(false);
   const [secondsLeft, setSecondsLeft] = useState(0);
 
@@ -29,10 +31,11 @@ export function useSessionTimeout() {
   const doLogout = useCallback(async () => {
     clearTimers();
     await fetch("/api/auth/logout", { method: "POST" });
+    queryClient.clear();
     localStorage.removeItem("employee_cart");
     localStorage.removeItem("employee_order_queue");
     router.replace("/login");
-  }, [clearTimers, router]);
+  }, [clearTimers, queryClient, router]);
 
   const startTimers = useCallback(() => {
     clearTimers();

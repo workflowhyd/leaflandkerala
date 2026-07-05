@@ -1,26 +1,12 @@
 "use client";
-import { useEffect, useState, useCallback } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Truck, MapPin, Phone, Package, CheckCircle,
   ChevronRight, RefreshCw, Navigation, Undo2,
 } from "lucide-react";
-
-interface OrderItem {
-  quantity: number;
-  product: { name: string };
-}
-
-interface DeliveryOrder {
-  id: string;
-  orderNumber: string;
-  status: string;
-  totalAmount: number;
-  notes?: string | null;
-  deliveryDate?: string | null;
-  customer: { id: string; name: string; mobile: string; village?: string | null; address: string };
-  items: OrderItem[];
-}
+import { useOrdersList, useUpdateOrderStatus } from "@/hooks/use-employee-orders";
+import type { EmployeeOrderListItem as DeliveryOrder } from "@/lib/api/orders";
 
 const STATUS_LABEL: Record<string, string> = {
   NEW: "New",
@@ -53,24 +39,13 @@ const ACTIVE_STATUSES = ["NEW", "CONFIRMED", "PROCESSING", "PACKED", "OUT_FOR_DE
 
 export default function DeliveryPage() {
   const router = useRouter();
-  const [orders, setOrders] = useState<DeliveryOrder[]>([]);
-  const [loading, setLoading] = useState(true);
+  const ordersQuery = useOrdersList("all");
+  const orders = (ordersQuery.data ?? []).filter((o) => ACTIVE_STATUSES.includes(o.status));
+  const loading = ordersQuery.isPending;
+  const updateStatusMutation = useUpdateOrderStatus();
   const [updating, setUpdating] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [gpsMap, setGpsMap] = useState<Record<string, { lat: number; lng: number } | null>>({});
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await fetch("/api/employee/orders?view=all");
-      const data: DeliveryOrder[] = await res.json();
-      setOrders(data.filter((o) => ACTIVE_STATUSES.includes(o.status)));
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => { load(); }, [load]);
 
   async function captureGPS(orderId: string): Promise<{ lat: number; lng: number } | null> {
     return new Promise((resolve) => {
@@ -97,19 +72,10 @@ export default function DeliveryPage() {
         gps = await captureGPS(order.id);
       }
 
-      const res = await fetch(`/api/employee/orders/${order.id}/status`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ latitude: gps?.lat, longitude: gps?.lng }),
-      });
-
-      if (res.ok) {
-        await load();
-        setExpandedId(null);
-      } else {
-        const data = await res.json().catch(() => ({}));
-        alert(data.error ?? "Failed to update status.");
-      }
+      await updateStatusMutation.mutateAsync({ orderId: order.id, coords: { lat: gps?.lat, lng: gps?.lng } });
+      setExpandedId(null);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to update status.");
     } finally {
       setUpdating(null);
     }
@@ -138,7 +104,7 @@ export default function DeliveryPage() {
             <h1 className="text-white text-xl font-bold">My Deliveries</h1>
             <p className="text-green-200 text-sm mt-0.5">{orders.length} active order{orders.length !== 1 ? "s" : ""}</p>
           </div>
-          <button onClick={load} className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center">
+          <button onClick={() => ordersQuery.refetch()} className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center">
             <RefreshCw size={18} className="text-white" />
           </button>
         </div>

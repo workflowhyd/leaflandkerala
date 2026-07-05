@@ -4,36 +4,11 @@ import {
   Package, IndianRupee, Clock, Truck, CheckCircle, Circle,
   ShoppingBag, Wallet, X, Percent, TrendingUp,
 } from "lucide-react";
-
-interface HomeData {
-  name: string;
-  weekOrders: number;
-  pendingOrders: number;
-  totalEarnings: number;
-  daysUntilDelivery: number;
-  weekDays: { label: string; date: string; done: boolean; isToday: boolean }[];
-  weeklySales: number;
-  commissionRate: number;
-  commissionAmount: number;
-  nextSlabRate: number | null;
-  nextSlabAmountRemaining: number | null;
-  availableEarnings: number;
-  lastPaymentDate: string | null;
-  lastPaymentAmount: number | null;
-  lastPaymentRef: string | null;
-}
-
-interface CashoutEligibility {
-  weekStart: string;
-  weekEnd: string;
-  weeklySales: number;
-  commissionRate: number;
-  commissionAmount: number;
-  eligible: boolean;
-  reasons: string[];
-  alreadyRequested: boolean;
-  existingCashoutStatus: string | null;
-}
+import type { OfferItem, NewReward } from "@/lib/api/employee";
+import {
+  useEmployeeHome, useEmployeeOffers, useCashoutEligibility,
+  useRequestCashout, useMarkRewardsNotified,
+} from "@/hooks/use-employee-home";
 
 const CASHOUT_STATUS_LABEL: Record<string, string> = {
   PENDING: "Requested — Pending Review",
@@ -41,23 +16,6 @@ const CASHOUT_STATUS_LABEL: Record<string, string> = {
   PAID: "Paid",
   REJECTED: "Rejected",
 };
-
-interface OfferItem {
-  id: string;
-  title: string;
-  description: string;
-  offerType: string;
-  bannerImage: string | null;
-}
-
-interface NewReward { id: string; offerId: string }
-
-interface OffersData {
-  offers: OfferItem[];
-  newRewards: NewReward[];
-  monthsOfService: number;
-  is6MonthEligible: boolean;
-}
 
 const OFFER_EMOJI: Record<string, string> = {
   SIX_MONTHS_BONUS: "🏆", BEST_PERFORMER: "🥇", MONTHLY_INCENTIVE: "💰",
@@ -81,12 +39,6 @@ function OffersBanner({
 }) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [notified, setNotified] = useState(false);
-
-  useEffect(() => {
-    if (newRewards.length > 0 || offers.length <= 1) return;
-    const timer = setInterval(() => setCurrentIndex((i) => (i + 1) % offers.length), 4000);
-    return () => clearInterval(timer);
-  }, [newRewards.length, offers.length]);
 
   useEffect(() => {
     if (newRewards.length > 0 && !notified) {
@@ -144,61 +96,39 @@ function OffersBanner({
 }
 
 export default function EmployeeHome() {
-  const [data, setData] = useState<HomeData | null>(null);
-  const [offersData, setOffersData] = useState<OffersData | null>(null);
-  const [cashout, setCashout] = useState<CashoutEligibility | null>(null);
-  const [loading, setLoading] = useState(true);
+  const homeQuery = useEmployeeHome();
+  const offersQuery = useEmployeeOffers();
+  const cashoutQuery = useCashoutEligibility();
+  const requestCashoutMutation = useRequestCashout();
+  const markNotifiedMutation = useMarkRewardsNotified();
+
+  const data = homeQuery.data;
+  const offersData = offersQuery.data;
+  const cashout = cashoutQuery.data;
+  const loading = homeQuery.isPending || offersQuery.isPending || cashoutQuery.isPending;
+
   const [bannerDismissed, setBannerDismissed] = useState(false);
   const [showCashoutConfirm, setShowCashoutConfirm] = useState(false);
-  const [requestingCashout, setRequestingCashout] = useState(false);
   const [cashoutError, setCashoutError] = useState("");
   const [cashoutSuccess, setCashoutSuccess] = useState(false);
+  const requestingCashout = requestCashoutMutation.isPending;
 
-  const loadCashout = useCallback(() => {
-    return fetch("/api/employee/cashout")
-      .then((r) => r.json())
-      .then((d) => { if (d?.eligibility) setCashout(d.eligibility); })
-      .catch(() => null);
-  }, []);
-
-  useEffect(() => {
-    Promise.all([
-      fetch("/api/employee/home").then((r) => r.json()),
-      fetch("/api/employee/offers").then((r) => r.json()).catch(() => null),
-      loadCashout(),
-    ]).then(([homeData, offers]) => {
-      setData(homeData);
-      if (offers && !offers.error) setOffersData(offers);
-    }).finally(() => setLoading(false));
-  }, [loadCashout]);
-
-  async function handleRequestCashout() {
-    setRequestingCashout(true);
+  function handleRequestCashout() {
     setCashoutError("");
-    try {
-      const res = await fetch("/api/employee/cashout", { method: "POST" });
-      const result = await res.json();
-      if (res.ok) {
+    requestCashoutMutation.mutate(undefined, {
+      onSuccess: () => {
         setShowCashoutConfirm(false);
         setCashoutSuccess(true);
-        await loadCashout();
-      } else {
-        setCashoutError(result.error || "Failed to submit cash-out request.");
-      }
-    } catch {
-      setCashoutError("Network error. Please try again.");
-    } finally {
-      setRequestingCashout(false);
-    }
+      },
+      onError: (err) => {
+        setCashoutError(err instanceof Error ? err.message : "Failed to submit cash-out request.");
+      },
+    });
   }
 
-  const handleMarkNotified = useCallback(async (ids: string[]) => {
-    for (const rewardId of ids) {
-      await fetch("/api/employee/rewards", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rewardId }),
-      }).catch(() => null);
-    }
+  const handleMarkNotified = useCallback((ids: string[]) => {
+    markNotifiedMutation.mutate(ids);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const today = new Date();

@@ -1,13 +1,8 @@
 "use client";
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Search, Plus, Phone, MapPin, X, Navigation } from "lucide-react";
-
-interface Customer {
-  id: string; name: string; mobile: string; address: string;
-  village?: string | null; district: string; pincode: string;
-  status: string; interestedProduct?: string | null;
-  location?: { latitude: number; longitude: number } | null;
-}
+import { useCustomerSearch, useCreateCustomer } from "@/hooks/use-employee-customers";
+import type { CustomerSearchResult as Customer } from "@/lib/api/customers";
 
 const STATUS_COLOR: Record<string, string> = {
   LEAD: "bg-blue-100 text-blue-700",
@@ -28,31 +23,24 @@ function mapsUrl(c: Customer): string {
 
 export default function CustomersPage() {
   const [query, setQuery] = useState("");
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [debouncedQuery, setDebouncedQuery] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ name: "", mobile: "", address: "", village: "", district: "", pincode: "" });
-  const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const search = useCallback(async (q: string) => {
-    setLoading(true);
-    try {
-      const res = await fetch(`/api/employee/customers?q=${encodeURIComponent(q)}`);
-      if (res.ok) setCustomers(await res.json());
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const searchQuery = useCustomerSearch(debouncedQuery);
+  const customers = searchQuery.data ?? [];
+  const loading = searchQuery.isFetching;
+
+  const createCustomerMutation = useCreateCustomer();
+  const saving = createCustomerMutation.isPending;
 
   useEffect(() => {
     if (timerRef.current) clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(() => search(query), 280);
+    timerRef.current = setTimeout(() => setDebouncedQuery(query), 280);
     return () => { if (timerRef.current) clearTimeout(timerRef.current); };
-  }, [query, search]);
-
-  useEffect(() => { search(""); }, [search]);
+  }, [query]);
 
   async function handleSave() {
     const { name, mobile, address, district, pincode } = form;
@@ -60,20 +48,13 @@ export default function CustomersPage() {
       setFormError("Please fill all required fields");
       return;
     }
-    setSaving(true);
     setFormError("");
-    const res = await fetch("/api/employee/customers", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(form),
-    });
-    setSaving(false);
-    if (res.ok || res.status === 409) {
+    try {
+      await createCustomerMutation.mutateAsync(form);
       setShowForm(false);
       setForm({ name: "", mobile: "", address: "", village: "", district: "", pincode: "" });
-      search(query);
-    } else {
-      const data = await res.json().catch(() => ({}));
-      setFormError(data.error ?? "Failed to save");
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : "Failed to save");
     }
   }
 
@@ -142,8 +123,8 @@ export default function CustomersPage() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <p className="font-semibold text-gray-800 text-sm">{c.name}</p>
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLOR[c.status] ?? "bg-gray-100 text-gray-500"}`}>
-                      {c.status.replace("_", " ")}
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLOR[c.status ?? ""] ?? "bg-gray-100 text-gray-500"}`}>
+                      {(c.status ?? "").replace("_", " ")}
                     </span>
                   </div>
 

@@ -219,6 +219,7 @@ export default function EmployeeProfilePage() {
   const [paymentsLoading, setPaymentsLoading] = useState(false);
   const [showPayDialog, setShowPayDialog] = useState(false);
   const [paying, setPaying] = useState(false);
+  const [generatingReceiptId, setGeneratingReceiptId] = useState<string | null>(null);
 
   // Document upload state
   const [docType, setDocType] = useState("AADHAAR");
@@ -396,6 +397,16 @@ export default function EmployeeProfilePage() {
     employee?.commissions.reduce((sum, c) => sum + c.amount, 0) || 0;
 
   async function downloadPaymentReceiptPDF(payment: Payment) {
+    if (!employee || !paymentsData) return;
+    setGeneratingReceiptId(payment.id);
+    try {
+      await buildAndSaveReceiptPDF(payment);
+    } finally {
+      setGeneratingReceiptId(null);
+    }
+  }
+
+  async function buildAndSaveReceiptPDF(payment: Payment) {
     if (!employee || !paymentsData) return;
     const { default: jsPDF } = await import("jspdf");
     const doc = new jsPDF();
@@ -1161,10 +1172,15 @@ export default function EmployeeProfilePage() {
                             <TableCell>
                               <button
                                 onClick={() => downloadPaymentReceiptPDF(p)}
-                                className="flex items-center gap-1 text-xs text-[#64748b] hover:text-[#1E4D3D] transition-colors"
+                                disabled={generatingReceiptId === p.id}
+                                className="flex items-center gap-1 text-xs text-[#64748b] hover:text-[#1E4D3D] transition-colors disabled:opacity-50"
                               >
-                                <Download className="h-3.5 w-3.5" />
-                                Receipt
+                                {generatingReceiptId === p.id ? (
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                ) : (
+                                  <Download className="h-3.5 w-3.5" />
+                                )}
+                                {generatingReceiptId === p.id ? "Generating…" : "Receipt"}
                               </button>
                             </TableCell>
                           </TableRow>

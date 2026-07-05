@@ -2,11 +2,14 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { Logo } from "@/components/ui/logo";
+import { fetchHome, fetchOffers, fetchCashout } from "@/lib/api/employee";
 
 export default function LoginPage() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
@@ -30,8 +33,17 @@ export default function LoginPage() {
 
       if (!res.ok || data.error) {
         setError(data.error || "Login failed. Please try again.");
+      } else if (data.user?.role === "EMPLOYEE") {
+        // Prime the session-check cache so the employee layout doesn't re-verify
+        // it with a redundant round-trip, and kick off the home page's data
+        // fetches now so they're ready (or already in-flight) by the time it mounts.
+        queryClient.setQueryData(["auth", "me"], { user: data.user });
+        queryClient.prefetchQuery({ queryKey: ["employee", "home"], queryFn: fetchHome });
+        queryClient.prefetchQuery({ queryKey: ["employee", "offers"], queryFn: fetchOffers });
+        queryClient.prefetchQuery({ queryKey: ["employee", "cashout"], queryFn: fetchCashout });
+        router.push("/employee/home");
       } else {
-        router.push(data.user?.role === "EMPLOYEE" ? "/employee/home" : "/dashboard");
+        router.push("/dashboard");
       }
     } catch {
       setError("Network error. Please check your connection.");

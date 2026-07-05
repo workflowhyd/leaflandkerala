@@ -45,19 +45,8 @@ const ICON_STYLES: Record<ToastType, string> = {
 };
 
 function ToastItem({ toast, onRemove }: { toast: Toast; onRemove: (_id: string) => void }) {
-  const [visible, setVisible] = useState(false);
-
   useEffect(() => {
-    // Trigger enter animation
-    const t = setTimeout(() => setVisible(true), 10);
-    return () => clearTimeout(t);
-  }, []);
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setVisible(false);
-      setTimeout(() => onRemove(toast.id), 300);
-    }, 3700);
+    const timer = setTimeout(() => onRemove(toast.id), 3700);
     return () => clearTimeout(timer);
   }, [toast.id, onRemove]);
 
@@ -66,9 +55,8 @@ function ToastItem({ toast, onRemove }: { toast: Toast; onRemove: (_id: string) 
   return (
     <div
       className={cn(
-        "flex w-80 max-w-[calc(100vw-2rem)] items-start gap-3 rounded-xl border p-4 shadow-lg transition-all duration-300",
-        STYLES[toast.type],
-        visible ? "translate-x-0 opacity-100" : "translate-x-full opacity-0"
+        "flex w-80 max-w-[calc(100vw-2rem)] items-start gap-3 rounded-xl border p-4 shadow-lg",
+        STYLES[toast.type]
       )}
     >
       <Icon className={cn("h-5 w-5 flex-shrink-0 mt-0.5", ICON_STYLES[toast.type])} />
@@ -79,10 +67,7 @@ function ToastItem({ toast, onRemove }: { toast: Toast; onRemove: (_id: string) 
         )}
       </div>
       <button
-        onClick={() => {
-          setVisible(false);
-          setTimeout(() => onRemove(toast.id), 300);
-        }}
+        onClick={() => onRemove(toast.id)}
         className="flex-shrink-0 text-[#94a3b8] hover:text-[#64748b] transition-colors"
       >
         <X className="h-4 w-4" />

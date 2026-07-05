@@ -29,14 +29,14 @@ export async function GET(request: NextRequest) {
   const page = parseInt(searchParams.get("page") || "1");
   const limit = parseInt(searchParams.get("limit") || "20");
 
-  const where: Record<string, unknown> = {};
-
+  const scopeWhere: Record<string, unknown> = {};
   if (session.role === "EMPLOYEE" && session.employeeId) {
-    where.employeeId = session.employeeId;
+    scopeWhere.employeeId = session.employeeId;
   } else if (employeeId) {
-    where.employeeId = employeeId;
+    scopeWhere.employeeId = employeeId;
   }
 
+  const where: Record<string, unknown> = { ...scopeWhere };
   if (search) {
     where.OR = [
       { orderNumber: { contains: search, mode: "insensitive" } },
@@ -45,7 +45,7 @@ export async function GET(request: NextRequest) {
   }
   if (status) where.status = status;
 
-  const [orders, total] = await Promise.all([
+  const [orders, total, statusCounts, scopedTotal] = await Promise.all([
     prisma.order.findMany({
       where,
       orderBy: { createdAt: "desc" },
@@ -58,9 +58,25 @@ export async function GET(request: NextRequest) {
       },
     }),
     prisma.order.count({ where }),
+    // Status breakdown across the employee/search scope (ignoring the current
+    // status filter itself) — a single grouped aggregate instead of fetching
+    // up to 1000 rows and counting client-side.
+    prisma.order.groupBy({ by: ["status"], where: scopeWhere, _count: { status: true } }),
+    prisma.order.count({ where: scopeWhere }),
   ]);
 
-  return NextResponse.json({ orders, total, page, limit });
+  const counts = {
+    total: scopedTotal,
+    NEW: 0,
+    PROCESSING: 0,
+    DELIVERED: 0,
+    CANCELLED: 0,
+  };
+  for (const row of statusCounts) {
+    if (row.status in counts) counts[row.status as keyof typeof counts] = row._count.status;
+  }
+
+  return NextResponse.json({ orders, total, page, limit, counts });
 }
 
 export async function POST(request: NextRequest) {

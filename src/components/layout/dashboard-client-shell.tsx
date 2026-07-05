@@ -7,6 +7,7 @@ import { Sidebar } from "./sidebar";
 import { TopNav } from "./top-nav";
 import { BottomNav } from "./bottom-nav";
 import { ToastProvider } from "@/components/ui/toast";
+import { useQueryClient } from "@tanstack/react-query";
 import { useSessionTimeout } from "@/hooks/use-session-timeout";
 import { SessionTimeoutModal } from "@/components/ui/session-timeout-modal";
 
@@ -95,8 +96,10 @@ export function DashboardClientShell({
     }
   }, [mobileMenuOpen]);
 
+  const queryClient = useQueryClient();
   const handleLogout = async () => {
     await fetch("/api/auth/logout", { method: "POST" });
+    queryClient.clear();
     localStorage.removeItem("employee_cart");
     localStorage.removeItem("employee_order_queue");
     router.push("/login");
