@@ -21,6 +21,7 @@ interface OrderItem {
   quantity: number;
   price: number;
   subtotal: number;
+  isGift?: boolean;
   product: { name: string; sku: string };
 }
 
@@ -280,7 +281,14 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
                 <TableBody>
                   {order.items.map((item) => (
                     <TableRow key={item.id}>
-                      <TableCell className="font-medium">{item.product.name}</TableCell>
+                      <TableCell className="font-medium">
+                        {item.product.name}
+                        {item.isGift && (
+                          <span className="ml-2 inline-flex items-center rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-semibold text-green-700">
+                            🎁 Free Gift
+                          </span>
+                        )}
+                      </TableCell>
                       <TableCell className="text-[#64748b]">{item.product.sku}</TableCell>
                       <TableCell className="text-right">{item.quantity}</TableCell>
                       <TableCell className="text-right">{formatCurrency(item.price)}</TableCell>

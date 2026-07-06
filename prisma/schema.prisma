@@ -312,6 +312,7 @@ model Product {
   orderItems         OrderItem[]
   returnItems        ReturnItem[]
   inventoryMovements InventoryMovement[]
+  giftItem           GiftItem?
 
   @@index([name])
   @@index([isActive])
@@ -354,6 +355,7 @@ model OrderItem {
   quantity  Int
   price     Float
   subtotal  Float
+  isGift    Boolean @default(false)
 
   order       Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
   product     Product      @relation(fields: [productId], references: [id])
@@ -394,16 +396,31 @@ model DeliverySchedule {
 }
 
 model CommissionSetting {
-  id                    String   @id @default(cuid())
-  defaultPercentage     Float    @default(10.0)
-  minPercentage         Float    @default(5.0)
-  maxPercentage         Float    @default(15.0)
-  weeklyBonusThreshold  Float    @default(50000)
-  weeklyBonusRate       Float    @default(35)
-  freeGiftEnabled       Boolean  @default(false)
-  freeGiftProductName   String   @default("Free Gift")
-  freeGiftMinAmount     Float    @default(3000)
-  updatedAt             DateTime @updatedAt
+  id                     String   @id @default(cuid())
+  defaultPercentage      Float    @default(10.0)
+  minPercentage          Float    @default(5.0)
+  maxPercentage          Float    @default(15.0)
+  weeklyBonusThreshold   Float    @default(50000)
+  weeklyBonusRate        Float    @default(35)
+  freeGiftEnabled        Boolean  @default(false)
+  freeGiftTier1MinAmount Float    @default(5000)
+  freeGiftTier1Choices   Int      @default(1)
+  freeGiftTier2MinAmount Float    @default(10000)
+  freeGiftTier2Choices   Int      @default(2)
+  updatedAt              DateTime @updatedAt
+}
+
+// Admin-curated pool of products customers can choose as a free gift
+// (up to 5 items) once their order qualifies via CommissionSetting's tiers.
+model GiftItem {
+  id        String   @id @default(cuid())
+  productId String   @unique
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([isActive])
 }
 
 model Commission {

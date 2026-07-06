@@ -50,8 +50,24 @@ interface CommissionSetting {
   weeklyBonusThreshold: number;
   weeklyBonusRate: number;
   freeGiftEnabled: boolean;
-  freeGiftProductName: string;
-  freeGiftMinAmount: number;
+  freeGiftTier1MinAmount: number;
+  freeGiftTier1Choices: number;
+  freeGiftTier2MinAmount: number;
+  freeGiftTier2Choices: number;
+}
+
+interface GiftItem {
+  id: string;
+  product: {
+    id: string;
+    name: string;
+    sku: string;
+    serialNumber: number;
+    imageUrl?: string | null;
+    price: number;
+    stock: number;
+    isActive: boolean;
+  };
 }
 
 interface Pincode {
@@ -156,8 +172,18 @@ export default function SettingsPage() {
   const [commission, setCommission] = useState<CommissionSetting>({
     defaultPercentage: 10, minPercentage: 5, maxPercentage: 15,
     weeklyBonusThreshold: 50000, weeklyBonusRate: 35,
-    freeGiftEnabled: false, freeGiftProductName: "Free Gift", freeGiftMinAmount: 3000,
+    freeGiftEnabled: false,
+    freeGiftTier1MinAmount: 5000, freeGiftTier1Choices: 1,
+    freeGiftTier2MinAmount: 10000, freeGiftTier2Choices: 2,
   });
+
+  // Gift item pool state
+  const [giftItems, setGiftItems] = useState<GiftItem[]>([]);
+  const [giftItemsLoading, setGiftItemsLoading] = useState(false);
+  const [newGiftSerial, setNewGiftSerial] = useState("");
+  const [addingGiftItem, setAddingGiftItem] = useState(false);
+  const [giftItemError, setGiftItemError] = useState("");
+  const [removingGiftItemId, setRemovingGiftItemId] = useState<string | null>(null);
   const [pincodes, setPincodes] = useState<Pincode[]>([]);
   const [newPincode, setNewPincode] = useState({ code: "", area: "", district: "" });
   const [pincodeLoading, setPincodeLoading] = useState(false);
@@ -186,6 +212,16 @@ export default function SettingsPage() {
     if (res.ok) setOffers(await res.json());
   };
 
+  const fetchGiftItems = async () => {
+    setGiftItemsLoading(true);
+    try {
+      const res = await fetch("/api/admin/gift-items");
+      if (res.ok) setGiftItems(await res.json());
+    } finally {
+      setGiftItemsLoading(false);
+    }
+  };
+
   useEffect(() => {
     fetch("/api/settings").then((r) => r.json()).then((data) => {
       if (data.company) setCompany({ businessName: data.company.businessName || "", contactNumber: data.company.contactNumber || "", email: data.company.email || "", gstNumber: data.company.gstNumber || "", address: data.company.address || "", logoUrl: data.company.logoUrl || "" });
@@ -197,13 +233,51 @@ export default function SettingsPage() {
         weeklyBonusThreshold: data.commission.weeklyBonusThreshold ?? 50000,
         weeklyBonusRate: data.commission.weeklyBonusRate ?? 35,
         freeGiftEnabled: data.commission.freeGiftEnabled ?? false,
-        freeGiftProductName: data.commission.freeGiftProductName ?? "Free Gift",
-        freeGiftMinAmount: data.commission.freeGiftMinAmount ?? 3000,
+        freeGiftTier1MinAmount: data.commission.freeGiftTier1MinAmount ?? 5000,
+        freeGiftTier1Choices: data.commission.freeGiftTier1Choices ?? 1,
+        freeGiftTier2MinAmount: data.commission.freeGiftTier2MinAmount ?? 10000,
+        freeGiftTier2Choices: data.commission.freeGiftTier2Choices ?? 2,
       });
     });
     fetchPincodes();
     fetchOffers();
+    fetchGiftItems();
   }, []);
+
+  async function handleAddGiftItem() {
+    const serialNumber = newGiftSerial.trim();
+    if (!serialNumber) return;
+    setAddingGiftItem(true);
+    setGiftItemError("");
+    try {
+      const res = await fetch("/api/admin/gift-items", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ serialNumber }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setGiftItemError(data.error || "Failed to add gift item");
+        return;
+      }
+      setNewGiftSerial("");
+      await fetchGiftItems();
+    } catch {
+      setGiftItemError("Network error. Please try again.");
+    } finally {
+      setAddingGiftItem(false);
+    }
+  }
+
+  async function handleRemoveGiftItem(id: string) {
+    setRemovingGiftItemId(id);
+    try {
+      await fetch(`/api/admin/gift-items/${id}`, { method: "DELETE" });
+      setGiftItems((prev) => prev.filter((g) => g.id !== id));
+    } finally {
+      setRemovingGiftItemId(null);
+    }
+  }
 
   const showSaved = (msg = "Settings saved successfully.") => {
     setSaveMsg(msg);
@@ -492,27 +566,130 @@ export default function SettingsPage() {
                   </button>
                 </div>
                 {commission.freeGiftEnabled && (
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-sm font-medium text-[#1a1a1a]">Minimum Order Amount (₹)</label>
-                      <input
-                        type="number"
-                        min={0}
-                        step={100}
-                        value={commission.freeGiftMinAmount}
-                        onChange={(e) => setCommission((p) => ({ ...p, freeGiftMinAmount: parseFloat(e.target.value) || 0 }))}
-                        className="w-full rounded-md border border-[#e2e8f0] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3B7A57]"
-                      />
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="flex flex-col gap-1.5">
+                        <label className="text-sm font-medium text-[#1a1a1a]">Tier 1 — Minimum Amount (₹)</label>
+                        <input
+                          type="number"
+                          min={0}
+                          step={100}
+                          value={commission.freeGiftTier1MinAmount}
+                          onChange={(e) => setCommission((p) => ({ ...p, freeGiftTier1MinAmount: parseFloat(e.target.value) || 0 }))}
+                          className="w-full rounded-md border border-[#e2e8f0] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3B7A57]"
+                        />
+                      </div>
+                      <div className="flex flex-col gap-1.5">
+                        <label className="text-sm font-medium text-[#1a1a1a]">Tier 1 — Choices Allowed</label>
+                        <input
+                          type="number"
+                          min={1}
+                          max={5}
+                          value={commission.freeGiftTier1Choices}
+                          onChange={(e) => setCommission((p) => ({ ...p, freeGiftTier1Choices: parseInt(e.target.value, 10) || 1 }))}
+                          className="w-full rounded-md border border-[#e2e8f0] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3B7A57]"
+                        />
+                      </div>
+                      <div className="flex flex-col gap-1.5">
+                        <label className="text-sm font-medium text-[#1a1a1a]">Tier 2 — Minimum Amount (₹)</label>
+                        <input
+                          type="number"
+                          min={0}
+                          step={100}
+                          value={commission.freeGiftTier2MinAmount}
+                          onChange={(e) => setCommission((p) => ({ ...p, freeGiftTier2MinAmount: parseFloat(e.target.value) || 0 }))}
+                          className="w-full rounded-md border border-[#e2e8f0] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3B7A57]"
+                        />
+                      </div>
+                      <div className="flex flex-col gap-1.5">
+                        <label className="text-sm font-medium text-[#1a1a1a]">Tier 2 — Choices Allowed</label>
+                        <input
+                          type="number"
+                          min={1}
+                          max={5}
+                          value={commission.freeGiftTier2Choices}
+                          onChange={(e) => setCommission((p) => ({ ...p, freeGiftTier2Choices: parseInt(e.target.value, 10) || 1 }))}
+                          className="w-full rounded-md border border-[#e2e8f0] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3B7A57]"
+                        />
+                      </div>
                     </div>
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-sm font-medium text-[#1a1a1a]">Free Gift Item Name</label>
-                      <input
-                        type="text"
-                        value={commission.freeGiftProductName}
-                        onChange={(e) => setCommission((p) => ({ ...p, freeGiftProductName: e.target.value }))}
-                        placeholder="e.g. Organic Tea Sample"
-                        className="w-full rounded-md border border-[#e2e8f0] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3B7A57]"
-                      />
+                    <p className="text-xs text-[#64748b]">
+                      e.g. orders of ₹{commission.freeGiftTier1MinAmount.toLocaleString("en-IN")}+ get {commission.freeGiftTier1Choices} free item choice{commission.freeGiftTier1Choices !== 1 ? "s" : ""};
+                      {" "}orders of ₹{commission.freeGiftTier2MinAmount.toLocaleString("en-IN")}+ get {commission.freeGiftTier2Choices}.
+                    </p>
+
+                    {/* Gift Product Pool */}
+                    <div className="border-t border-[#e2e8f0] pt-4">
+                      <p className="text-sm font-semibold text-[#1a1a1a] mb-1">Gift Product Pool</p>
+                      <p className="text-xs text-[#64748b] mb-3">
+                        Products the customer can choose from as their free gift (up to 5). Add by product serial number.
+                      </p>
+
+                      <div className="flex items-end gap-2 mb-3">
+                        <div className="flex flex-col gap-1.5 flex-1 max-w-[200px]">
+                          <label className="text-sm font-medium text-[#1a1a1a]">Product Serial Number</label>
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            value={newGiftSerial}
+                            onChange={(e) => setNewGiftSerial(e.target.value.replace(/\D/g, ""))}
+                            placeholder="e.g. 42"
+                            disabled={giftItems.length >= 5}
+                            className="w-full rounded-md border border-[#e2e8f0] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3B7A57] disabled:opacity-50"
+                          />
+                        </div>
+                        <Button
+                          variant="outline"
+                          loading={addingGiftItem}
+                          disabled={giftItems.length >= 5 || !newGiftSerial.trim()}
+                          onClick={handleAddGiftItem}
+                        >
+                          <Plus className="h-4 w-4" /> Add
+                        </Button>
+                      </div>
+                      {giftItemError && <p className="text-xs text-[#D32F2F] mb-3">{giftItemError}</p>}
+                      {giftItems.length >= 5 && (
+                        <p className="text-xs text-[#64748b] mb-3">Maximum of 5 gift items reached — remove one to add another.</p>
+                      )}
+
+                      {giftItemsLoading ? (
+                        <div className="flex justify-center py-6">
+                          <div className="h-6 w-6 animate-spin rounded-full border-2 border-[#1E4D3D] border-t-transparent" />
+                        </div>
+                      ) : giftItems.length === 0 ? (
+                        <p className="text-sm text-[#64748b] py-3">No gift items configured yet.</p>
+                      ) : (
+                        <div className="space-y-2">
+                          {giftItems.map((g) => (
+                            <div key={g.id} className="flex items-center justify-between gap-3 rounded-lg border border-[#e2e8f0] px-3 py-2">
+                              <div className="flex items-center gap-3 min-w-0">
+                                {g.product.imageUrl ? (
+                                  // eslint-disable-next-line @next/next/no-img-element
+                                  <img src={g.product.imageUrl} alt={g.product.name} loading="lazy" decoding="async" className="h-10 w-10 rounded-md object-cover bg-gray-100 flex-shrink-0" />
+                                ) : (
+                                  <div className="h-10 w-10 rounded-md bg-gray-100 flex-shrink-0" />
+                                )}
+                                <div className="min-w-0">
+                                  <p className="text-sm font-medium text-[#1a1a1a] truncate">{g.product.name}</p>
+                                  <p className="text-xs text-[#64748b]">
+                                    #{g.product.serialNumber} · {g.product.sku} · Stock: {g.product.stock}
+                                    {!g.product.isActive && <span className="text-[#D32F2F]"> · Inactive</span>}
+                                  </p>
+                                </div>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveGiftItem(g.id)}
+                                disabled={removingGiftItemId === g.id}
+                                className="text-[#D32F2F] hover:text-[#B71C1C] flex-shrink-0 disabled:opacity-50"
+                                aria-label={`Remove ${g.product.name} from gift pool`}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
@@ -521,8 +698,10 @@ export default function SettingsPage() {
             <div className="mt-6 flex justify-end">
               <Button loading={saving} onClick={() => saveSettings("commission", {
                 freeGiftEnabled: commission.freeGiftEnabled,
-                freeGiftProductName: commission.freeGiftProductName,
-                freeGiftMinAmount: commission.freeGiftMinAmount,
+                freeGiftTier1MinAmount: commission.freeGiftTier1MinAmount,
+                freeGiftTier1Choices: commission.freeGiftTier1Choices,
+                freeGiftTier2MinAmount: commission.freeGiftTier2MinAmount,
+                freeGiftTier2Choices: commission.freeGiftTier2Choices,
               })}>
                 Save Free Gift Settings
               </Button>

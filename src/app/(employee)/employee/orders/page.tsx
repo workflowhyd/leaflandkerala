@@ -4,14 +4,14 @@ import { useSearchParams, useRouter } from "next/navigation";
 import {
   ArrowLeft, Plus, Minus, Search, Trash2, MapPin, CheckCircle,
   ChevronRight, ShoppingCart, X, AlertCircle, Camera, MessageCircle,
-  Home, ExternalLink, RefreshCw, Navigation, Image as ImageIcon,
+  Home, ExternalLink, RefreshCw, Navigation, Image as ImageIcon, Check,
 } from "lucide-react";
 import { useCart, CartItem } from "@/components/employee/cart-context";
 import { compressImageToTarget, ImageTooLargeError } from "@/lib/compress-image";
 import { getCategoryMeta } from "@/lib/category-images";
 import { cloudinaryThumb } from "@/lib/image-thumb";
-import { uploadHousePhoto } from "@/lib/api/orders";
-import { useOrdersList, useProductSearch, usePlaceOrder } from "@/hooks/use-employee-orders";
+import { uploadHousePhoto, getGiftChoicesAllowed } from "@/lib/api/orders";
+import { useOrdersList, useProductSearch, usePlaceOrder, useGiftItems } from "@/hooks/use-employee-orders";
 import { useCustomerSearch, useCreateCustomer } from "@/hooks/use-employee-customers";
 import { useFreeGift } from "@/hooks/use-employee-home";
 
@@ -169,6 +169,25 @@ function OrdersPageContent() {
   }, []);
 
   const { data: freeGift } = useFreeGift();
+  const { data: giftPool = [] } = useGiftItems();
+  const [selectedGiftProductIds, setSelectedGiftProductIds] = useState<string[]>([]);
+  const allowedGiftChoices = freeGift ? getGiftChoicesAllowed(total, freeGift) : 0;
+
+  // Trim selections if the cart total drops below a tier (fewer choices allowed than before).
+  useEffect(() => {
+    if (selectedGiftProductIds.length > allowedGiftChoices) {
+      setSelectedGiftProductIds((prev) => prev.slice(0, allowedGiftChoices));
+    }
+  }, [allowedGiftChoices, selectedGiftProductIds.length]);
+
+  function toggleGiftSelection(productId: string) {
+    setSelectedGiftProductIds((prev) => {
+      if (prev.includes(productId)) return prev.filter((id) => id !== productId);
+      if (prev.length >= allowedGiftChoices) return prev;
+      return [...prev, productId];
+    });
+  }
+
   const ordersQuery = useOrdersList("week", step === "list");
   const orders = ordersQuery.data ?? [];
   const loadingOrders = ordersQuery.isFetching;
@@ -269,18 +288,14 @@ function OrdersPageContent() {
     setSubmitting(true);
     setSubmitError("");
 
-    const freeGiftEligible = freeGift?.enabled && total >= (freeGift?.minAmount ?? 0);
-    const freeGiftNote = freeGiftEligible ? `[Free Gift: ${freeGift!.productName}]` : "";
-    const fullNotes = [notes, freeGiftNote].filter(Boolean).join(" | ");
-
     const payload = {
       customerId: selectedCustomer.id,
       items: cartItems.map((i) => ({ productId: i.productId, quantity: i.quantity, price: i.price })),
-      notes: fullNotes || undefined,
+      notes: notes || undefined,
       latitude: gps?.lat,
       longitude: gps?.lng,
       accuracy: gps?.accuracy,
-      freeGift: freeGiftEligible ? { name: freeGift!.productName } : undefined,
+      giftProductIds: selectedGiftProductIds.length ? selectedGiftProductIds : undefined,
     };
 
     try {
@@ -319,6 +334,7 @@ function OrdersPageContent() {
     setCustomerQuery("");
     setProductQuery("");
     setSubmitError("");
+    setSelectedGiftProductIds([]);
     router.replace("/employee/orders");
   }
 
@@ -429,22 +445,59 @@ function OrdersPageContent() {
 
       {cartItems.length > 0 && (
         <div className="px-4 pb-4 space-y-2">
-          {/* Free gift banner */}
-          {freeGift?.enabled && total >= freeGift.minAmount && (
-            <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-3 flex items-center gap-3">
-              <span className="text-2xl leading-none">🎁</span>
-              <div>
-                <p className="text-sm font-semibold text-green-800">Free Gift Unlocked!</p>
-                <p className="text-xs text-green-600">{freeGift.productName} added to your order at no cost.</p>
+          {/* Free gift picker */}
+          {freeGift?.enabled && allowedGiftChoices > 0 && (
+            <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-3">
+              <div className="flex items-center gap-3 mb-2">
+                <span className="text-2xl leading-none">🎁</span>
+                <div>
+                  <p className="text-sm font-semibold text-green-800">
+                    Free Gift Unlocked! Choose {allowedGiftChoices}
+                  </p>
+                  <p className="text-xs text-green-600">
+                    {selectedGiftProductIds.length}/{allowedGiftChoices} selected
+                  </p>
+                </div>
               </div>
+              {giftPool.length === 0 ? (
+                <p className="text-xs text-green-700">No gift items configured yet — check back soon.</p>
+              ) : (
+                <div className="space-y-1.5">
+                  {giftPool.map((g) => {
+                    const selected = selectedGiftProductIds.includes(g.product.id);
+                    const disabled = !selected && selectedGiftProductIds.length >= allowedGiftChoices;
+                    return (
+                      <button
+                        key={g.id}
+                        type="button"
+                        onClick={() => toggleGiftSelection(g.product.id)}
+                        disabled={disabled}
+                        className={`w-full flex items-center gap-2 rounded-lg border px-3 py-2 text-left transition-colors ${
+                          selected
+                            ? "border-green-500 bg-white"
+                            : disabled
+                            ? "border-green-100 bg-green-50/50 opacity-50"
+                            : "border-green-200 bg-white"
+                        }`}
+                      >
+                        <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 ${selected ? "bg-green-600 border-green-600" : "border-gray-300"}`}>
+                          {selected && <Check size={12} className="text-white" />}
+                        </div>
+                        <span className="text-sm text-gray-700 flex-1 min-w-0 truncate">{g.product.name}</span>
+                        <span className="text-xs text-gray-400">Free</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
-          {/* Nudge: how much more to unlock free gift */}
-          {freeGift?.enabled && total < freeGift.minAmount && (
+          {/* Nudge: how much more to unlock a free gift */}
+          {freeGift?.enabled && allowedGiftChoices === 0 && (
             <div className="bg-amber-50 border border-amber-100 rounded-xl px-4 py-3 flex items-center gap-3">
               <span className="text-xl leading-none">🎁</span>
               <p className="text-xs text-amber-700">
-                Add ₹{(freeGift.minAmount - total).toLocaleString("en-IN")} more to get a free <span className="font-semibold">{freeGift.productName}</span>!
+                Add ₹{(freeGift.tier1MinAmount - total).toLocaleString("en-IN")} more to unlock a free gift!
               </p>
             </div>
           )}
@@ -606,12 +659,16 @@ function OrdersPageContent() {
               <span className="font-medium">₹{(i.price * i.quantity).toLocaleString("en-IN")}</span>
             </div>
           ))}
-          {freeGift?.enabled && total >= freeGift.minAmount && (
-            <div className="flex justify-between text-sm py-1 text-green-600">
-              <span className="flex items-center gap-1">🎁 {freeGift.productName} <span className="text-xs text-green-500">(Free)</span></span>
-              <span className="font-medium">₹0</span>
-            </div>
-          )}
+          {selectedGiftProductIds.map((productId) => {
+            const gift = giftPool.find((g) => g.product.id === productId);
+            if (!gift) return null;
+            return (
+              <div key={productId} className="flex justify-between text-sm py-1 text-green-600">
+                <span className="flex items-center gap-1">🎁 {gift.product.name} <span className="text-xs text-green-500">(Free)</span></span>
+                <span className="font-medium">₹0</span>
+              </div>
+            );
+          })}
           <div className="border-t border-gray-100 mt-2 pt-2 flex justify-between font-bold text-gray-800">
             <span>Total</span>
             <span className="text-green-700">₹{total.toLocaleString("en-IN")}</span>

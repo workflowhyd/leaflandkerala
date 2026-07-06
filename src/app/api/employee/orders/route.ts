@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { recalculateEmployeeCommission } from "@/lib/commission";
+import { recalculateEmployeeCommission, getFreeGiftSettings, getGiftChoicesAllowed } from "@/lib/commission";
 
 function getWeekRange() {
   const now = new Date();
@@ -53,7 +53,7 @@ export async function GET(request: NextRequest) {
       customer: { select: { id: true, name: true, mobile: true, village: true, address: true } },
       items: {
         select: {
-          quantity: true, price: true, subtotal: true,
+          quantity: true, price: true, subtotal: true, isGift: true,
           product: { select: { id: true, name: true, sku: true, serialNumber: true, imageUrl: true } },
         },
       },
@@ -77,6 +77,7 @@ export async function POST(request: NextRequest) {
     notes?: string;
     latitude?: number;
     longitude?: number;
+    giftProductIds?: string[];
   };
 
   try {
@@ -85,10 +86,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
   }
 
-  const { customerId, items, notes, latitude, longitude } = body;
+  const { customerId, items, notes, latitude, longitude, giftProductIds = [] } = body;
 
   if (!customerId || !items?.length) {
     return NextResponse.json({ error: "customerId and items are required" }, { status: 400 });
+  }
+  if (new Set(giftProductIds).size !== giftProductIds.length) {
+    return NextResponse.json({ error: "Duplicate gift item selected" }, { status: 400 });
   }
 
   try {
@@ -110,13 +114,49 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "One or more products are unavailable. Please refresh and try again." }, { status: 400 });
     }
 
-    const orderItems = items.map((i) => ({
+    const paidItems = items.map((i) => ({
       productId: i.productId,
       quantity: i.quantity,
       price: i.price,
       subtotal: i.price * i.quantity,
+      isGift: false,
     }));
-    const totalAmount = orderItems.reduce((s, i) => s + i.subtotal, 0);
+    const totalAmount = paidItems.reduce((s, i) => s + i.subtotal, 0);
+
+    // Validate and attach any chosen free-gift items (0-price line items).
+    let giftItems: typeof paidItems = [];
+    if (giftProductIds.length) {
+      const giftSettings = await getFreeGiftSettings();
+      const allowedChoices = getGiftChoicesAllowed(totalAmount, giftSettings);
+      if (giftProductIds.length > allowedChoices) {
+        return NextResponse.json(
+          { error: `This order qualifies for ${allowedChoices} free gift item(s), not ${giftProductIds.length}.` },
+          { status: 400 }
+        );
+      }
+
+      const poolItems = await prisma.giftItem.findMany({
+        where: { productId: { in: giftProductIds }, isActive: true },
+        include: { product: { select: { id: true, stock: true, isActive: true } } },
+      });
+      if (poolItems.length !== giftProductIds.length) {
+        return NextResponse.json({ error: "One or more selected gift items are no longer available." }, { status: 400 });
+      }
+      const unavailable = poolItems.find((g) => !g.product.isActive || g.product.stock < 1);
+      if (unavailable) {
+        return NextResponse.json({ error: "One or more selected gift items are out of stock." }, { status: 400 });
+      }
+
+      giftItems = giftProductIds.map((productId) => ({
+        productId,
+        quantity: 1,
+        price: 0,
+        subtotal: 0,
+        isGift: true,
+      }));
+    }
+
+    const orderItems = [...paidItems, ...giftItems];
 
     const now = new Date();
     const daysUntilSunday = (7 - now.getDay()) % 7 || 7;

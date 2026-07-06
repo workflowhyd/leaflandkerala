@@ -104,11 +104,29 @@ export async function recalculateEmployeeCommission(employeeId: string, client: 
 
 export async function getFreeGiftSettings() {
   const settings = await prisma.commissionSetting.findFirst({
-    select: { freeGiftEnabled: true, freeGiftProductName: true, freeGiftMinAmount: true },
+    select: {
+      freeGiftEnabled: true,
+      freeGiftTier1MinAmount: true,
+      freeGiftTier1Choices: true,
+      freeGiftTier2MinAmount: true,
+      freeGiftTier2Choices: true,
+    },
   });
   return {
     enabled: settings?.freeGiftEnabled ?? false,
-    productName: settings?.freeGiftProductName ?? "Free Gift",
-    minAmount: settings?.freeGiftMinAmount ?? 3000,
+    tier1MinAmount: settings?.freeGiftTier1MinAmount ?? 5000,
+    tier1Choices: settings?.freeGiftTier1Choices ?? 1,
+    tier2MinAmount: settings?.freeGiftTier2MinAmount ?? 10000,
+    tier2Choices: settings?.freeGiftTier2Choices ?? 2,
   };
+}
+
+export type FreeGiftSettings = Awaited<ReturnType<typeof getFreeGiftSettings>>;
+
+/** How many free gift items the customer may choose, given the cart total and current tier settings. */
+export function getGiftChoicesAllowed(cartTotal: number, settings: FreeGiftSettings): number {
+  if (!settings.enabled) return 0;
+  if (cartTotal >= settings.tier2MinAmount) return settings.tier2Choices;
+  if (cartTotal >= settings.tier1MinAmount) return settings.tier1Choices;
+  return 0;
 }

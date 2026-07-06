@@ -66,8 +66,10 @@ export interface OffersData {
 
 export interface FreeGiftSettings {
   enabled: boolean;
-  productName: string;
-  minAmount: number;
+  tier1MinAmount: number;
+  tier1Choices: number;
+  tier2MinAmount: number;
+  tier2Choices: number;
 }
 
 export async function fetchHome(): Promise<HomeData> {

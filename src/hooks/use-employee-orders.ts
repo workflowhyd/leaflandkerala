@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { fetchOrdersList, searchProducts, placeOrder, updateOrderStatus } from "@/lib/api/orders";
+import { fetchOrdersList, searchProducts, placeOrder, updateOrderStatus, fetchGiftItems } from "@/lib/api/orders";
 
 export function useOrdersList(view: "week" | "all", enabled = true) {
   return useQuery({
@@ -14,6 +14,14 @@ export function useProductSearch(term: string) {
     queryKey: ["employee", "products", "search", term],
     queryFn: () => searchProducts(term),
     staleTime: 30_000,
+  });
+}
+
+export function useGiftItems() {
+  return useQuery({
+    queryKey: ["employee", "gift-items"],
+    queryFn: fetchGiftItems,
+    staleTime: 60_000,
   });
 }
 

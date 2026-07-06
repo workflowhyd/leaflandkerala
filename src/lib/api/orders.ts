@@ -1,3 +1,5 @@
+import type { FreeGiftSettings } from "@/lib/api/employee";
+
 export interface Product {
   id: string;
   name: string;
@@ -13,7 +15,13 @@ export interface OrderLineItem {
   quantity: number;
   price: number;
   subtotal: number;
+  isGift?: boolean;
   product: { id: string; name: string; sku: string; serialNumber: number; imageUrl?: string | null };
+}
+
+export interface GiftPoolItem {
+  id: string;
+  product: { id: string; name: string; sku: string; serialNumber: number; imageUrl?: string | null; stock: number };
 }
 
 export interface EmployeeOrderListItem {
@@ -47,7 +55,7 @@ export interface PlaceOrderInput {
   latitude?: number;
   longitude?: number;
   accuracy?: number;
-  freeGift?: { name: string };
+  giftProductIds?: string[];
 }
 
 export async function fetchOrdersList(view: "week" | "all"): Promise<EmployeeOrderListItem[]> {
@@ -60,6 +68,20 @@ export async function searchProducts(query: string): Promise<Product[]> {
   const res = await fetch(`/api/employee/products?q=${encodeURIComponent(query)}`);
   if (!res.ok) throw new Error("Failed to search products");
   return res.json();
+}
+
+export async function fetchGiftItems(): Promise<GiftPoolItem[]> {
+  const res = await fetch("/api/employee/gift-items");
+  if (!res.ok) throw new Error("Failed to load gift items");
+  return res.json();
+}
+
+/** Mirrors src/lib/commission.ts's getGiftChoicesAllowed for client-side eligibility display. */
+export function getGiftChoicesAllowed(cartTotal: number, settings: FreeGiftSettings): number {
+  if (!settings.enabled) return 0;
+  if (cartTotal >= settings.tier2MinAmount) return settings.tier2Choices;
+  if (cartTotal >= settings.tier1MinAmount) return settings.tier1Choices;
+  return 0;
 }
 
 export async function placeOrder(payload: PlaceOrderInput): Promise<PlacedOrder> {
