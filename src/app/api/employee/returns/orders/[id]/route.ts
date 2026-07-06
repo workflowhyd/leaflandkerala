@@ -27,6 +27,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
           id: true,
           quantity: true,
           price: true,
+          isGift: true,
           product: { select: { id: true, name: true, serialNumber: true, sku: true } },
         },
       },
@@ -45,7 +46,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   });
   const claimedMap = new Map(claimed.map((c) => [c.orderItemId, c._sum.quantity ?? 0]));
 
-  const items = order.items.map((item) => {
+  // Free gift items aren't manually returnable — they're reclaimed automatically
+  // when a return drops the order below the gift-eligible tier (see returns POST route).
+  const items = order.items.filter((item) => !item.isGift).map((item) => {
     const alreadyClaimed = claimedMap.get(item.id) ?? 0;
     return {
       orderItemId: item.id,

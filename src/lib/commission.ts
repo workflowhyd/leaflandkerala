@@ -102,8 +102,8 @@ export async function recalculateEmployeeCommission(employeeId: string, client: 
   return { monthlySales, weeklySales, commissionRate, commissionAmount };
 }
 
-export async function getFreeGiftSettings() {
-  const settings = await prisma.commissionSetting.findFirst({
+export async function getFreeGiftSettings(client: DbClient = prisma) {
+  const settings = await client.commissionSetting.findFirst({
     select: {
       freeGiftEnabled: true,
       freeGiftTier1MinAmount: true,

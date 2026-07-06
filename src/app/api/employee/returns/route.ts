@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { uploadImage } from "@/lib/cloudinary";
-import { recalculateEmployeeCommission } from "@/lib/commission";
+import { recalculateEmployeeCommission, getFreeGiftSettings, getGiftChoicesAllowed } from "@/lib/commission";
 import { getStatusLabel } from "@/lib/utils";
 import type { Prisma } from "@prisma/client";
 
@@ -98,7 +98,7 @@ export async function POST(request: NextRequest) {
 
     const order = await prisma.order.findFirst({
       where: { id: orderId, employeeId: employee.id },
-      include: { customer: true, items: true },
+      include: { customer: true, items: { include: { product: { select: { name: true } } } } },
     });
     if (!order) return NextResponse.json({ error: "Order not found or does not belong to you" }, { status: 404 });
 
@@ -106,6 +106,12 @@ export async function POST(request: NextRequest) {
     const orderItemsById = new Map(order.items.map((oi) => [oi.id, oi]));
     if (orderItemIds.some((id) => !orderItemsById.has(id))) {
       return NextResponse.json({ error: "One or more items do not belong to this order" }, { status: 400 });
+    }
+    if (orderItemIds.some((id) => orderItemsById.get(id)!.isGift)) {
+      return NextResponse.json(
+        { error: "Free gift items can't be returned directly — they're adjusted automatically." },
+        { status: 400 }
+      );
     }
 
     // Re-validate returnable quantity server-side against already-claimed returns.
@@ -205,18 +211,73 @@ export async function POST(request: NextRequest) {
         });
       }
 
+      // If this return drops the order below a free-gift tier, claw back the
+      // now-unearned gift choice(s) — regardless of the human-picked return reason.
+      const allOrderItemIds = order.items.map((oi) => oi.id);
+      const returnedAgg = await tx.returnItem.groupBy({
+        by: ["orderItemId"],
+        where: {
+          orderItemId: { in: allOrderItemIds },
+          return: { status: { in: ["PENDING", "APPROVED", "COMPLETED"] } },
+        },
+        _sum: { quantity: true },
+      });
+      const returnedQtyMap = new Map(returnedAgg.map((r) => [r.orderItemId, r._sum.quantity ?? 0]));
+
+      const nonGiftItems = order.items.filter((oi) => !oi.isGift);
+      const currentPaidTotal = nonGiftItems.reduce((sum, oi) => {
+        const remaining = Math.max(0, oi.quantity - (returnedQtyMap.get(oi.id) ?? 0));
+        return sum + remaining * oi.price;
+      }, 0);
+
+      const activeGiftItems = order.items.filter(
+        (oi) => oi.isGift && (returnedQtyMap.get(oi.id) ?? 0) < oi.quantity
+      );
+
+      const giftSettings = await getFreeGiftSettings(tx);
+      const allowedGiftChoices = getGiftChoicesAllowed(currentPaidTotal, giftSettings);
+      const excessGiftItems = activeGiftItems.slice(allowedGiftChoices);
+
+      const reclaimedGifts: { productName: string }[] = [];
+      if (excessGiftItems.length) {
+        await tx.returnItem.createMany({
+          data: excessGiftItems.map((gi) => ({
+            returnId: created.id,
+            orderItemId: gi.id,
+            productId: gi.productId,
+            quantity: gi.quantity - (returnedQtyMap.get(gi.id) ?? 0),
+          })),
+        });
+        for (const gi of excessGiftItems) {
+          const qty = gi.quantity - (returnedQtyMap.get(gi.id) ?? 0);
+          await tx.product.update({ where: { id: gi.productId }, data: { stock: { increment: qty } } });
+          await tx.inventoryMovement.create({
+            data: {
+              productId: gi.productId,
+              returnId: created.id,
+              quantity: qty,
+              reason: `Return ${created.returnNumber} — free gift reclaimed (order fell below gift threshold)`,
+            },
+          });
+          reclaimedGifts.push({ productName: gi.product.name });
+        }
+      }
+
       // A completed return reduces this period's sales, which can move the employee's commission tier.
       await recalculateEmployeeCommission(employee.id, tx);
 
-      return created;
-    });
+      return { ...created, reclaimedGifts };
+    }, { timeout: 15000 });
 
     await prisma.activityLog.create({
       data: {
         userId: session.userId,
         customerId: order.customerId,
         type: "RETURN_CREATE",
-        description: `Return ${returnRecord.returnNumber} completed for order ${order.orderNumber} — ${returnRecord.items.length} item(s)`,
+        description: `Return ${returnRecord.returnNumber} completed for order ${order.orderNumber} — ${returnRecord.items.length} item(s)`
+          + (returnRecord.reclaimedGifts.length
+            ? ` (free gift reclaimed: ${returnRecord.reclaimedGifts.map((g) => g.productName).join(", ")})`
+            : ""),
         metadata: {
           returnId: returnRecord.id,
           returnNumber: returnRecord.returnNumber,
