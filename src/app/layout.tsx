@@ -16,7 +16,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "LeafLand Kerala",
   description: "LeafLand Kerala — Agriculture ERP for managing farms, sales, and operations.",
-  icons: { icon: "/logo.svg" },
+  icons: { icon: "/logo.png" },
 };
 
 export default function RootLayout({

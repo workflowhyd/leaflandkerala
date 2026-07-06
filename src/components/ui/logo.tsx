@@ -31,7 +31,7 @@ export function Logo({ size = "md", className }: LogoProps) {
     >
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
-        src="/logo.svg"
+        src="/logo.png"
         alt="Leaf Land Kerala"
         style={{ height: img, width: "auto", maxWidth: "100%" }}
       />
