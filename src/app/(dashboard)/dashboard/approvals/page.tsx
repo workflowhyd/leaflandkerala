@@ -15,8 +15,11 @@ interface RegistrationRequest {
   id: string;
   fullName: string;
   mobileNumber: string;
+  address: string | null;
   governmentIdType: string;
-  governmentIdImageUrl: string;
+  governmentIdNumber: string | null;
+  governmentIdFrontUrl: string;
+  governmentIdBackUrl: string | null;
   status: "PENDING" | "APPROVED" | "REJECTED";
   adminNotes: string | null;
   submittedAt: string;
@@ -72,7 +75,9 @@ async function downloadRegistrationPDF(reg: RegistrationRequest) {
   const fields: [string, string][] = [
     ["Full Name", reg.fullName],
     ["Mobile Number", reg.mobileNumber],
+    ["Address", reg.address || "—"],
     ["Government ID Type", idTypeLabel(reg.governmentIdType)],
+    ["Government ID Number", reg.governmentIdNumber || "—"],
     ["Registration Date", new Date(reg.submittedAt).toLocaleDateString("en-IN", {
       day: "numeric", month: "long", year: "numeric",
     })],
@@ -299,7 +304,9 @@ function DetailModal({ open, request, onClose, onApprove, onReject }: {
           {[
             ["Full Name", request.fullName],
             ["Mobile Number", request.mobileNumber],
+            ["Address", request.address || "—"],
             ["ID Type", idTypeLabel(request.governmentIdType)],
+            ["ID Number", request.governmentIdNumber || "—"],
             ["Submitted", new Date(request.submittedAt).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })],
             ...(request.approvedAt ? [["Decision Date", new Date(request.approvedAt).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })]] : []),
             ["Status", request.status],
@@ -323,14 +330,26 @@ function DetailModal({ open, request, onClose, onApprove, onReject }: {
           </div>
         )}
 
-        {request.governmentIdImageUrl && (
+        <div className="grid grid-cols-2 gap-3">
           <div>
-            <p className="text-[10px] font-semibold text-[#64748b] uppercase tracking-wide mb-2">Government ID Photo</p>
+            <p className="text-[10px] font-semibold text-[#64748b] uppercase tracking-wide mb-2">ID Photo — Front</p>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={request.governmentIdImageUrl} alt="Government ID" loading="lazy" decoding="async"
+            <img src={request.governmentIdFrontUrl} alt="Government ID — Front" loading="lazy" decoding="async"
               className="w-full max-h-72 object-contain rounded-lg border border-[#e2e8f0] bg-gray-50" />
           </div>
-        )}
+          <div>
+            <p className="text-[10px] font-semibold text-[#64748b] uppercase tracking-wide mb-2">ID Photo — Back</p>
+            {request.governmentIdBackUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={request.governmentIdBackUrl} alt="Government ID — Back" loading="lazy" decoding="async"
+                className="w-full max-h-72 object-contain rounded-lg border border-[#e2e8f0] bg-gray-50" />
+            ) : (
+              <div className="flex h-full min-h-[100px] items-center justify-center rounded-lg border border-[#e2e8f0] bg-gray-50 text-xs text-[#94a3b8]">
+                Not provided
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     </Modal>
   );

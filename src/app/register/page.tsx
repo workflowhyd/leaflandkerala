@@ -19,63 +19,201 @@ const ID_TYPE_OPTIONS = [
 
 type IdType = (typeof ID_TYPE_OPTIONS)[number]["value"];
 
+interface PhotoSideState {
+  file: File | null;
+  compressedImage: string | null;
+  preview: string | null;
+  originalSize: number;
+  compressedSize: number;
+  compressing: boolean;
+  error: string;
+}
+
+const emptyPhotoState: PhotoSideState = {
+  file: null,
+  compressedImage: null,
+  preview: null,
+  originalSize: 0,
+  compressedSize: 0,
+  compressing: false,
+  error: "",
+};
+
+function PhotoUploadField({
+  label,
+  state,
+  onFileSelected,
+}: {
+  label: string;
+  state: PhotoSideState;
+  onFileSelected: (_file: File) => void;
+}) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  return (
+    <div>
+      <label className="block text-sm font-medium mb-1.5" style={{ color: "#374151" }}>
+        Government ID Photo — {label} <span style={{ color: "#D32F2F" }}>*</span>
+      </label>
+
+      <button
+        type="button"
+        onClick={() => fileInputRef.current?.click()}
+        className="w-full rounded-lg border-2 border-dashed px-4 py-4 text-sm transition-colors text-center"
+        style={{
+          borderColor: state.file ? "#3B7A57" : "#e2e8f0",
+          backgroundColor: state.file ? "rgba(59,122,87,0.05)" : "#fafafa",
+          color: "#64748b",
+        }}
+      >
+        {state.file ? (
+          <span style={{ color: "#3B7A57" }}>{state.file.name} — tap to change</span>
+        ) : (
+          <span>
+            Tap to upload {label.toLowerCase()} photo
+            <br />
+            <span className="text-xs" style={{ color: "#94a3b8" }}>
+              JPG, PNG or WEBP accepted
+            </span>
+          </span>
+        )}
+      </button>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          e.target.value = "";
+          if (file) onFileSelected(file);
+        }}
+        className="hidden"
+        aria-label={`Upload government ID photo (${label})`}
+      />
+
+      {state.preview && (
+        <div className="mt-3">
+          {state.compressing ? (
+            <div
+              className="flex h-32 items-center justify-center rounded-lg border"
+              style={{ borderColor: "#e2e8f0" }}
+            >
+              <div
+                className="h-6 w-6 animate-spin rounded-full border-2 border-t-transparent"
+                style={{ borderColor: "#3B7A57", borderTopColor: "transparent" }}
+              />
+              <span className="ml-2 text-xs" style={{ color: "#64748b" }}>
+                Compressing…
+              </span>
+            </div>
+          ) : (
+            <>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={state.preview}
+                alt={`${label} ID preview`}
+                className="w-full rounded-lg border object-cover"
+                style={{ aspectRatio: "3/2", borderColor: "#e2e8f0", objectFit: "cover" }}
+              />
+              {state.compressedSize > 0 && (
+                <div className="mt-1.5 flex gap-2 text-xs" style={{ color: "#64748b" }}>
+                  <span>Original: {formatBytes(state.originalSize)}</span>
+                  <span>→</span>
+                  <span style={{ color: "#2E7D32" }}>Compressed: {formatBytes(state.compressedSize)}</span>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
+      {state.error && (
+        <p className="mt-1.5 text-xs" style={{ color: "#D32F2F" }}>
+          {state.error}
+        </p>
+      )}
+    </div>
+  );
+}
+
 export default function RegisterPage() {
   const router = useRouter();
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [fullName, setFullName] = useState("");
   const [mobileNumber, setMobileNumber] = useState("");
+  const [address, setAddress] = useState("");
   const [governmentIdType, setGovernmentIdType] = useState<IdType | "">("");
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [compressedImage, setCompressedImage] = useState<string | null>(null);
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const [originalSize, setOriginalSize] = useState<number>(0);
-  const [compressedSize, setCompressedSize] = useState<number>(0);
-  const [compressing, setCompressing] = useState(false);
+  const [governmentIdNumber, setGovernmentIdNumber] = useState("");
+
+  const [frontPhoto, setFrontPhoto] = useState<PhotoSideState>(emptyPhotoState);
+  const [backPhoto, setBackPhoto] = useState<PhotoSideState>(emptyPhotoState);
 
   const [submitting, setSubmitting] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<
-    "idle" | "uploading" | "submitting"
+    "idle" | "uploading-front" | "uploading-back" | "submitting"
   >("idle");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
 
-  async function handleFileChange(e: ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setImageFile(file);
-    setOriginalSize(file.size);
-    setCompressedImage(null);
-    setCompressedSize(0);
-    setCompressing(true);
-
-    // Show raw preview immediately
-    const rawUrl = URL.createObjectURL(file);
-    setImagePreview(rawUrl);
+  async function handlePhotoChange(
+    file: File,
+    setState: React.Dispatch<React.SetStateAction<PhotoSideState>>
+  ) {
+    setState((s) => ({
+      ...s,
+      file,
+      originalSize: file.size,
+      compressedImage: null,
+      compressedSize: 0,
+      compressing: true,
+      error: "",
+      preview: URL.createObjectURL(file),
+    }));
 
     try {
       const compressed = await compressImageToTarget(file);
-      setCompressedImage(compressed);
-      // compressed is base64; estimate bytes
       const approxBytes = Math.round((compressed.length * 3) / 4);
-      setCompressedSize(approxBytes);
-      setImagePreview(compressed);
-      setError("");
+      setState((s) => ({
+        ...s,
+        compressedImage: compressed,
+        compressedSize: approxBytes,
+        preview: compressed,
+        error: "",
+      }));
     } catch (err) {
-      setError(err instanceof ImageTooLargeError ? err.message : "Failed to process image. Please try a different file.");
-      setCompressedImage(null);
-      setCompressedSize(0);
+      setState((s) => ({
+        ...s,
+        error:
+          err instanceof ImageTooLargeError
+            ? err.message
+            : "Failed to process image. Please try a different file.",
+        compressedImage: null,
+        compressedSize: 0,
+      }));
     } finally {
-      setCompressing(false);
+      setState((s) => ({ ...s, compressing: false }));
     }
+  }
+
+  async function uploadPhoto(imageData: string): Promise<{ url: string; publicId?: string }> {
+    const uploadRes = await fetch("/api/auth/register-upload", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ imageData }),
+    });
+    const uploadData: { url?: string; publicId?: string; error?: string } = await uploadRes
+      .json()
+      .catch(() => ({}));
+    if (!uploadRes.ok || !uploadData.url) {
+      throw new Error(uploadData.error || "Image upload failed.");
+    }
+    return { url: uploadData.url, publicId: uploadData.publicId };
   }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError("");
 
-    // Validate
     if (!fullName.trim()) {
       setError("Full name is required.");
       return;
@@ -84,69 +222,61 @@ export default function RegisterPage() {
       setError("Mobile number must be exactly 10 digits.");
       return;
     }
+    if (!address.trim()) {
+      setError("Address is required.");
+      return;
+    }
     if (!governmentIdType) {
       setError("Please select a Government ID type.");
       return;
     }
-    if (!compressedImage) {
-      setError("Please upload a Government ID photo.");
+    if (!governmentIdNumber.trim()) {
+      setError("Government ID number is required.");
+      return;
+    }
+    if (!frontPhoto.compressedImage) {
+      setError("Please upload the front photo of your Government ID.");
+      return;
+    }
+    if (!backPhoto.compressedImage) {
+      setError("Please upload the back photo of your Government ID.");
       return;
     }
 
     setSubmitting(true);
-    setUploadProgress("uploading");
 
     try {
-      // Step 1: Upload image
-      const uploadRes = await fetch("/api/auth/register-upload", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ imageData: compressedImage }),
-      });
-      let uploadData: { url?: string; publicId?: string; error?: string } = {};
-      try {
-        uploadData = await uploadRes.json();
-      } catch {
-        setError("Image upload failed. Please try again.");
-        return;
-      }
-      if (!uploadRes.ok) {
-        setError(uploadData.error || "Image upload failed.");
-        return;
-      }
+      setUploadProgress("uploading-front");
+      const front = await uploadPhoto(frontPhoto.compressedImage);
 
-      const { url: governmentIdImageUrl, publicId: governmentIdPublicId } =
-        uploadData;
+      setUploadProgress("uploading-back");
+      const back = await uploadPhoto(backPhoto.compressedImage);
 
       setUploadProgress("submitting");
-
-      // Step 2: Submit registration
       const regRes = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           fullName: fullName.trim(),
           mobileNumber,
+          address: address.trim(),
           governmentIdType,
-          governmentIdImageUrl,
-          governmentIdPublicId,
+          governmentIdNumber: governmentIdNumber.trim(),
+          governmentIdFrontUrl: front.url,
+          governmentIdFrontPublicId: front.publicId,
+          governmentIdBackUrl: back.url,
+          governmentIdBackPublicId: back.publicId,
         }),
       });
-      let regData: { id?: string; error?: string } = {};
-      try {
-        regData = await regRes.json();
-      } catch {
-        setError("Registration failed. Please try again.");
-        return;
-      }
+      const regData: { id?: string; error?: string } = await regRes.json().catch(() => ({}));
       if (!regRes.ok) {
         setError(regData.error || "Registration failed. Please try again.");
         return;
       }
 
       setSuccess(true);
-    } catch {
-      setError("Network error. Please check your connection and try again.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Network error. Please check your connection and try again.");
     } finally {
       setSubmitting(false);
       setUploadProgress("idle");
@@ -298,6 +428,31 @@ export default function RegisterPage() {
                 />
               </div>
 
+              {/* Address */}
+              <div>
+                <label
+                  htmlFor="address"
+                  className="block text-sm font-medium mb-1.5"
+                  style={{ color: "#374151" }}
+                >
+                  Address <span style={{ color: "#D32F2F" }}>*</span>
+                </label>
+                <textarea
+                  id="address"
+                  required
+                  rows={2}
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value)}
+                  placeholder="Your full address"
+                  className="w-full rounded-lg border px-4 py-2.5 text-sm outline-none focus:ring-2 transition-colors resize-none"
+                  style={{
+                    borderColor: "#e2e8f0",
+                    backgroundColor: "#ffffff",
+                    color: "#1a1a1a",
+                  }}
+                />
+              </div>
+
               {/* Government ID Type */}
               <div>
                 <label
@@ -332,98 +487,45 @@ export default function RegisterPage() {
                 </select>
               </div>
 
-              {/* Government ID Photo */}
+              {/* Government ID Number */}
               <div>
                 <label
+                  htmlFor="governmentIdNumber"
                   className="block text-sm font-medium mb-1.5"
                   style={{ color: "#374151" }}
                 >
-                  Government ID Photo <span style={{ color: "#D32F2F" }}>*</span>
+                  Government ID Number <span style={{ color: "#D32F2F" }}>*</span>
                 </label>
-
-                {/* File Input Button */}
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="w-full rounded-lg border-2 border-dashed px-4 py-4 text-sm transition-colors text-center"
-                  style={{
-                    borderColor: imageFile ? "#3B7A57" : "#e2e8f0",
-                    backgroundColor: imageFile
-                      ? "rgba(59,122,87,0.05)"
-                      : "#fafafa",
-                    color: "#64748b",
-                  }}
-                >
-                  {imageFile ? (
-                    <span style={{ color: "#3B7A57" }}>
-                      {imageFile.name} — tap to change
-                    </span>
-                  ) : (
-                    <span>
-                      Tap to upload ID photo
-                      <br />
-                      <span className="text-xs" style={{ color: "#94a3b8" }}>
-                        JPG, PNG or WEBP accepted
-                      </span>
-                    </span>
-                  )}
-                </button>
                 <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp"
-                  onChange={handleFileChange}
-                  className="hidden"
-                  aria-label="Upload government ID photo"
+                  id="governmentIdNumber"
+                  type="text"
+                  required
+                  value={governmentIdNumber}
+                  onChange={(e) => setGovernmentIdNumber(e.target.value)}
+                  placeholder="Enter the ID number as printed on your document"
+                  className="w-full rounded-lg border px-4 py-2.5 text-sm outline-none focus:ring-2 transition-colors"
+                  style={{
+                    borderColor: "#e2e8f0",
+                    backgroundColor: "#ffffff",
+                    color: "#1a1a1a",
+                  }}
                 />
-
-                {/* Preview */}
-                {imagePreview && (
-                  <div className="mt-3">
-                    {compressing ? (
-                      <div
-                        className="flex h-40 items-center justify-center rounded-lg border"
-                        style={{ borderColor: "#e2e8f0" }}
-                      >
-                        <div
-                          className="h-6 w-6 animate-spin rounded-full border-2 border-t-transparent"
-                          style={{ borderColor: "#3B7A57", borderTopColor: "transparent" }}
-                        />
-                        <span className="ml-2 text-xs" style={{ color: "#64748b" }}>
-                          Compressing…
-                        </span>
-                      </div>
-                    ) : (
-                      <>
-                        <img
-                          src={imagePreview}
-                          alt="ID preview"
-                          className="w-full rounded-lg border object-cover"
-                          style={{
-                            aspectRatio: "3/2",
-                            borderColor: "#e2e8f0",
-                            objectFit: "cover",
-                          }}
-                        />
-                        {compressedSize > 0 && (
-                          <div
-                            className="mt-1.5 flex gap-2 text-xs"
-                            style={{ color: "#64748b" }}
-                          >
-                            <span>
-                              Original: {formatBytes(originalSize)}
-                            </span>
-                            <span>→</span>
-                            <span style={{ color: "#2E7D32" }}>
-                              Compressed: {formatBytes(compressedSize)}
-                            </span>
-                          </div>
-                        )}
-                      </>
-                    )}
-                  </div>
-                )}
+                <p className="mt-1 text-xs" style={{ color: "#94a3b8" }}>
+                  Recorded for your file only — not verified against any government database.
+                </p>
               </div>
+
+              {/* Government ID Photos — Front & Back */}
+              <PhotoUploadField
+                label="Front"
+                state={frontPhoto}
+                onFileSelected={(file) => handlePhotoChange(file, setFrontPhoto)}
+              />
+              <PhotoUploadField
+                label="Back"
+                state={backPhoto}
+                onFileSelected={(file) => handlePhotoChange(file, setBackPhoto)}
+              />
 
               {/* Error */}
               {error && (
@@ -454,14 +556,19 @@ export default function RegisterPage() {
               {/* Submit Button */}
               <button
                 type="submit"
-                disabled={submitting || compressing}
+                disabled={submitting || frontPhoto.compressing || backPhoto.compressing}
                 className="w-full rounded-lg py-3 px-4 text-sm font-semibold transition-all duration-150 flex items-center justify-center gap-2"
                 style={{
                   backgroundColor:
-                    submitting || compressing ? "#3B7A57" : "#1E4D3D",
+                    submitting || frontPhoto.compressing || backPhoto.compressing
+                      ? "#3B7A57"
+                      : "#1E4D3D",
                   color: "#F8F5EE",
-                  opacity: submitting || compressing ? 0.85 : 1,
-                  cursor: submitting || compressing ? "not-allowed" : "pointer",
+                  opacity: submitting || frontPhoto.compressing || backPhoto.compressing ? 0.85 : 1,
+                  cursor:
+                    submitting || frontPhoto.compressing || backPhoto.compressing
+                      ? "not-allowed"
+                      : "pointer",
                 }}
               >
                 {submitting ? (
@@ -478,8 +585,10 @@ export default function RegisterPage() {
                     >
                       <path d="M21 12a9 9 0 1 1-6.219-8.56" />
                     </svg>
-                    {uploadProgress === "uploading"
-                      ? "Uploading image…"
+                    {uploadProgress === "uploading-front"
+                      ? "Uploading front photo…"
+                      : uploadProgress === "uploading-back"
+                      ? "Uploading back photo…"
                       : "Submitting…"}
                   </>
                 ) : (

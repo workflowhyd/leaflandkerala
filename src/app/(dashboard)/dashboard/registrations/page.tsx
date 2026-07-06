@@ -11,8 +11,11 @@ interface RegistrationRequest {
   id: string;
   fullName: string;
   mobileNumber: string;
+  address: string | null;
   governmentIdType: string;
-  governmentIdImageUrl: string;
+  governmentIdNumber: string | null;
+  governmentIdFrontUrl: string;
+  governmentIdBackUrl: string | null;
   status: "PENDING" | "APPROVED" | "REJECTED";
   adminNotes: string | null;
   submittedAt: string;
@@ -333,23 +336,43 @@ function DetailModal({
   return (
     <Modal open={open} onClose={onClose} title="Registration Details" size="lg">
       <div className="space-y-5">
-        {/* ID Image */}
-        <div>
-          <p className="text-xs font-medium uppercase tracking-wide mb-2" style={{ color: "#94a3b8" }}>
-            Government ID Photo
-          </p>
-          <img
-            src={request.governmentIdImageUrl}
-            alt="Government ID"
-            loading="lazy"
-            decoding="async"
-            className="w-full rounded-lg border object-cover"
-            style={{
-              aspectRatio: "3/2",
-              objectFit: "cover",
-              borderColor: "#e2e8f0",
-            }}
-          />
+        {/* ID Images — Front & Back */}
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <p className="text-xs font-medium uppercase tracking-wide mb-2" style={{ color: "#94a3b8" }}>
+              ID Photo — Front
+            </p>
+            <img
+              src={request.governmentIdFrontUrl}
+              alt="Government ID — Front"
+              loading="lazy"
+              decoding="async"
+              className="w-full rounded-lg border object-cover"
+              style={{ aspectRatio: "3/2", objectFit: "cover", borderColor: "#e2e8f0" }}
+            />
+          </div>
+          <div>
+            <p className="text-xs font-medium uppercase tracking-wide mb-2" style={{ color: "#94a3b8" }}>
+              ID Photo — Back
+            </p>
+            {request.governmentIdBackUrl ? (
+              <img
+                src={request.governmentIdBackUrl}
+                alt="Government ID — Back"
+                loading="lazy"
+                decoding="async"
+                className="w-full rounded-lg border object-cover"
+                style={{ aspectRatio: "3/2", objectFit: "cover", borderColor: "#e2e8f0" }}
+              />
+            ) : (
+              <div
+                className="flex w-full items-center justify-center rounded-lg border text-xs"
+                style={{ aspectRatio: "3/2", borderColor: "#e2e8f0", color: "#94a3b8" }}
+              >
+                Not provided
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Details Grid */}
@@ -370,12 +393,28 @@ function DetailModal({
               {request.mobileNumber}
             </p>
           </div>
+          <div className="col-span-2">
+            <p className="text-xs font-medium uppercase tracking-wide" style={{ color: "#94a3b8" }}>
+              Address
+            </p>
+            <p className="mt-0.5 text-sm font-medium" style={{ color: "#1a1a1a" }}>
+              {request.address || "—"}
+            </p>
+          </div>
           <div>
             <p className="text-xs font-medium uppercase tracking-wide" style={{ color: "#94a3b8" }}>
               ID Type
             </p>
             <p className="mt-0.5 text-sm font-medium" style={{ color: "#1a1a1a" }}>
               {idTypeLabel(request.governmentIdType)}
+            </p>
+          </div>
+          <div>
+            <p className="text-xs font-medium uppercase tracking-wide" style={{ color: "#94a3b8" }}>
+              ID Number
+            </p>
+            <p className="mt-0.5 text-sm font-medium" style={{ color: "#1a1a1a" }}>
+              {request.governmentIdNumber || "—"}
             </p>
           </div>
           <div>

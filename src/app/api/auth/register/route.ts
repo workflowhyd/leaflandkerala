@@ -6,12 +6,24 @@ export async function POST(request: NextRequest) {
   const {
     fullName,
     mobileNumber,
+    address,
     governmentIdType,
-    governmentIdImageUrl,
-    governmentIdPublicId,
+    governmentIdNumber,
+    governmentIdFrontUrl,
+    governmentIdFrontPublicId,
+    governmentIdBackUrl,
+    governmentIdBackPublicId,
   } = body;
 
-  if (!fullName || !mobileNumber || !governmentIdType || !governmentIdImageUrl) {
+  if (
+    !fullName ||
+    !mobileNumber ||
+    !address ||
+    !governmentIdType ||
+    !governmentIdNumber ||
+    !governmentIdFrontUrl ||
+    !governmentIdBackUrl
+  ) {
     return NextResponse.json(
       { error: "All fields are required" },
       { status: 400 }
@@ -42,9 +54,13 @@ export async function POST(request: NextRequest) {
     data: {
       fullName,
       mobileNumber,
+      address,
       governmentIdType,
-      governmentIdImageUrl,
-      governmentIdPublicId: governmentIdPublicId || null,
+      governmentIdNumber,
+      governmentIdFrontUrl,
+      governmentIdFrontPublicId: governmentIdFrontPublicId || null,
+      governmentIdBackUrl,
+      governmentIdBackPublicId: governmentIdBackPublicId || null,
     },
   });
 
