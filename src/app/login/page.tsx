@@ -33,7 +33,11 @@ export default function LoginPage() {
 
       if (!res.ok || data.error) {
         setError(data.error || "Login failed. Please try again.");
-      } else if (data.user?.role === "EMPLOYEE") {
+        setLoading(false);
+        return;
+      }
+
+      if (data.user?.role === "EMPLOYEE") {
         // Prime the session-check cache so the employee layout doesn't re-verify
         // it with a redundant round-trip, and kick off the home page's data
         // fetches now so they're ready (or already in-flight) by the time it mounts.
@@ -45,9 +49,12 @@ export default function LoginPage() {
       } else {
         router.push("/dashboard");
       }
+      // Deliberately not resetting `loading` here — router.push() doesn't wait for
+      // the destination page's data to be ready, so keeping the spinner visible
+      // until this page unmounts avoids a blank "did it freeze?" gap during the
+      // redirect (the actual bug being fixed here).
     } catch {
       setError("Network error. Please check your connection.");
-    } finally {
       setLoading(false);
     }
   }
