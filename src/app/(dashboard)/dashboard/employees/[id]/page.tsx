@@ -44,7 +44,7 @@ import {
   TableCell,
 } from "@/components/ui/table";
 import { CustomerStatusBadge } from "@/components/customers/customer-status-badge";
-import { formatDate, formatCurrency, getStatusLabel, getStatusColor } from "@/lib/utils";
+import { formatDate, formatCurrency, getStatusLabel } from "@/lib/utils";
 import { compressImageToTarget, ImageTooLargeError } from "@/lib/compress-image";
 import { cloudinaryThumb } from "@/lib/image-thumb";
 
@@ -151,19 +151,7 @@ interface Employee {
   customers: CustomerRow[];
   orders: OrderRow[];
   commissions: Commission[];
-  cashouts: CashoutRow[];
   _count: { customers: number; orders: number; fieldVisits: number };
-}
-
-interface CashoutRow {
-  id: string;
-  weekStartDate: string;
-  weekEndDate: string;
-  weeklySales: number;
-  commissionRate: number;
-  commissionAmount: number;
-  status: string;
-  paidAt: string | null;
 }
 
 const TABS: { id: TabId; label: string; icon: React.ElementType }[] = [
@@ -749,52 +737,6 @@ export default function EmployeeProfilePage() {
             </CardContent>
           </Card>
 
-          {/* Cash-Out History */}
-          <Card className="lg:col-span-2">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Wallet className="h-4 w-4 text-[#3B7A57]" />
-                Cash-Out History
-                <span className="ml-auto text-sm font-normal text-[#64748b]">
-                  {employee.cashouts.length} request{employee.cashouts.length !== 1 ? "s" : ""}
-                </span>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="pt-0 px-0 pb-0">
-              {employee.cashouts.length === 0 ? (
-                <div className="px-6 pb-6 text-sm text-[#64748b]">No cash-out requests yet</div>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Week</TableHead>
-                      <TableHead className="text-right">Weekly Sales</TableHead>
-                      <TableHead className="text-right">Rate</TableHead>
-                      <TableHead className="text-right">Amount</TableHead>
-                      <TableHead>Status</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {employee.cashouts.map((c) => (
-                      <TableRow key={c.id}>
-                        <TableCell className="text-[#64748b]">
-                          {formatDate(c.weekStartDate)} – {formatDate(c.weekEndDate)}
-                        </TableCell>
-                        <TableCell className="text-right">{formatCurrency(c.weeklySales)}</TableCell>
-                        <TableCell className="text-right">{c.commissionRate}%</TableCell>
-                        <TableCell className="text-right font-semibold text-[#1E4D3D]">{formatCurrency(c.commissionAmount)}</TableCell>
-                        <TableCell>
-                          <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${getStatusColor(c.status)}`}>
-                            {getStatusLabel(c.status)}
-                          </span>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-            </CardContent>
-          </Card>
         </div>
       )}
 

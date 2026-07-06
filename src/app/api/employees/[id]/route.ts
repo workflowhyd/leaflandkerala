@@ -24,7 +24,6 @@ export async function GET(
         take: 10,
       },
       commissions: true,
-      cashouts: { orderBy: { weekStartDate: "desc" }, take: 10 },
       _count: { select: { customers: true, orders: true, fieldVisits: true } },
     },
   });

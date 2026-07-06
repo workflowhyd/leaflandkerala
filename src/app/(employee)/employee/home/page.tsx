@@ -2,20 +2,10 @@
 import { useEffect, useState, useCallback } from "react";
 import {
   Package, IndianRupee, Clock, Truck, CheckCircle, Circle,
-  ShoppingBag, Wallet, X, Percent, TrendingUp,
+  ShoppingBag, Percent, TrendingUp,
 } from "lucide-react";
 import type { OfferItem, NewReward } from "@/lib/api/employee";
-import {
-  useEmployeeHome, useEmployeeOffers, useCashoutEligibility,
-  useRequestCashout, useMarkRewardsNotified,
-} from "@/hooks/use-employee-home";
-
-const CASHOUT_STATUS_LABEL: Record<string, string> = {
-  PENDING: "Requested — Pending Review",
-  APPROVED: "Approved — Awaiting Payment",
-  PAID: "Paid",
-  REJECTED: "Rejected",
-};
+import { useEmployeeHome, useEmployeeOffers, useMarkRewardsNotified } from "@/hooks/use-employee-home";
 
 const OFFER_EMOJI: Record<string, string> = {
   SIX_MONTHS_BONUS: "🏆", BEST_PERFORMER: "🥇", MONTHLY_INCENTIVE: "💰",
@@ -98,33 +88,13 @@ function OffersBanner({
 export default function EmployeeHome() {
   const homeQuery = useEmployeeHome();
   const offersQuery = useEmployeeOffers();
-  const cashoutQuery = useCashoutEligibility();
-  const requestCashoutMutation = useRequestCashout();
   const markNotifiedMutation = useMarkRewardsNotified();
 
   const data = homeQuery.data;
   const offersData = offersQuery.data;
-  const cashout = cashoutQuery.data;
-  const loading = homeQuery.isPending || offersQuery.isPending || cashoutQuery.isPending;
+  const loading = homeQuery.isPending || offersQuery.isPending;
 
   const [bannerDismissed, setBannerDismissed] = useState(false);
-  const [showCashoutConfirm, setShowCashoutConfirm] = useState(false);
-  const [cashoutError, setCashoutError] = useState("");
-  const [cashoutSuccess, setCashoutSuccess] = useState(false);
-  const requestingCashout = requestCashoutMutation.isPending;
-
-  function handleRequestCashout() {
-    setCashoutError("");
-    requestCashoutMutation.mutate(undefined, {
-      onSuccess: () => {
-        setShowCashoutConfirm(false);
-        setCashoutSuccess(true);
-      },
-      onError: (err) => {
-        setCashoutError(err instanceof Error ? err.message : "Failed to submit cash-out request.");
-      },
-    });
-  }
 
   const handleMarkNotified = useCallback((ids: string[]) => {
     markNotifiedMutation.mutate(ids);
@@ -185,103 +155,6 @@ export default function EmployeeHome() {
           onDismiss={() => setBannerDismissed(true)}
           onMarkNotified={handleMarkNotified}
         />
-      )}
-
-      {/* Cash-Out Status */}
-      {cashout && (
-        <div className="mx-4 mt-4 rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <Wallet size={16} className="text-green-600" />
-              <p className="text-sm font-semibold text-gray-700">Cash-Out Status</p>
-            </div>
-            <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-700">
-              {cashout.commissionRate}% rate
-            </span>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3 mb-3">
-            <div>
-              <p className="text-xs text-gray-400">Weekly Sales</p>
-              <p className="text-lg font-bold text-gray-800">₹{Math.round(cashout.weeklySales).toLocaleString("en-IN")}</p>
-            </div>
-            <div>
-              <p className="text-xs text-gray-400">Commission Earned</p>
-              <p className="text-lg font-bold text-green-700">₹{Math.round(cashout.commissionAmount).toLocaleString("en-IN")}</p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-1.5 mb-2">
-            <span>{cashout.eligible ? "🟢" : "🔴"}</span>
-            <span className={`text-sm font-semibold ${cashout.eligible ? "text-green-700" : "text-gray-500"}`}>
-              {cashout.eligible
-                ? "Eligible"
-                : cashout.alreadyRequested
-                ? CASHOUT_STATUS_LABEL[cashout.existingCashoutStatus ?? "PENDING"]
-                : "Not Eligible Yet"}
-            </span>
-          </div>
-
-          {!cashout.eligible && cashout.reasons.length > 0 && (
-            <ul className="text-xs text-gray-400 mb-2 space-y-0.5">
-              {cashout.reasons.map((r, i) => <li key={i}>• {r}</li>)}
-            </ul>
-          )}
-
-          {cashout.eligible && (
-            <p className="text-sm text-gray-600 mb-3">
-              Cash-Out Available: <span className="font-bold text-green-700">₹{Math.round(cashout.commissionAmount).toLocaleString("en-IN")}</span>
-            </p>
-          )}
-
-          {cashoutSuccess && (
-            <div className="mb-3 rounded-lg bg-green-50 border border-green-100 px-3 py-2 text-xs text-green-700">
-              Cash-out request submitted successfully.
-            </div>
-          )}
-          {cashoutError && (
-            <div className="mb-3 rounded-lg bg-red-50 border border-red-100 px-3 py-2 text-xs text-red-600">
-              {cashoutError}
-            </div>
-          )}
-
-          <button
-            disabled={!cashout.eligible}
-            onClick={() => setShowCashoutConfirm(true)}
-            className="w-full bg-green-600 disabled:bg-gray-100 disabled:text-gray-400 text-white py-3 rounded-xl font-semibold text-sm transition-colors"
-          >
-            Request Cash-Out
-          </button>
-          {!cashout.eligible && !cashout.alreadyRequested && (
-            <p className="text-xs text-gray-400 mt-2 text-center">Complete all deliveries before requesting cash-out.</p>
-          )}
-        </div>
-      )}
-
-      {/* Cash-out confirmation modal */}
-      {showCashoutConfirm && cashout && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 px-4 pb-4 sm:pb-0">
-          <div className="w-full max-w-sm bg-white rounded-2xl p-5 shadow-xl">
-            <div className="flex items-center justify-between mb-3">
-              <p className="font-semibold text-gray-800">Confirm Cash-Out</p>
-              <button onClick={() => setShowCashoutConfirm(false)}><X size={18} className="text-gray-400" /></button>
-            </div>
-            <p className="text-sm text-gray-600 mb-4">
-              Are you sure you want to request this week&apos;s commission payout of{" "}
-              <span className="font-bold text-green-700">₹{Math.round(cashout.commissionAmount).toLocaleString("en-IN")}</span>?
-            </p>
-            <div className="flex gap-3">
-              <button onClick={() => setShowCashoutConfirm(false)} disabled={requestingCashout}
-                className="flex-1 border border-gray-200 text-gray-600 py-2.5 rounded-xl font-medium text-sm">
-                Cancel
-              </button>
-              <button onClick={handleRequestCashout} disabled={requestingCashout}
-                className="flex-1 bg-green-600 text-white py-2.5 rounded-xl font-semibold text-sm disabled:opacity-60">
-                {requestingCashout ? "Submitting..." : "Confirm"}
-              </button>
-            </div>
-          </div>
-        </div>
       )}
 
       <div className="px-4 py-4 space-y-4">
