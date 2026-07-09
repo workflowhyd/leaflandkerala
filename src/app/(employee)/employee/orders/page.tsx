@@ -328,7 +328,18 @@ function OrdersPageContent() {
         clearCart();
         setStep("list");
       } else {
-        setSubmitError(err instanceof Error ? err.message : "Connection error. Please check your internet and try again.");
+        const unavailableIds = (err as { unavailableProductIds?: string[] })?.unavailableProductIds;
+        if (unavailableIds?.length) {
+          const removedNames = cartItems.filter((i) => unavailableIds.includes(i.productId)).map((i) => i.name);
+          unavailableIds.forEach((id) => removeItem(id));
+          const plural = removedNames.length !== 1;
+          setSubmitError(
+            `${removedNames.join(", ") || "Some items"} ${plural ? "are" : "is"} no longer available and ${plural ? "have" : "has"} been removed from your cart. Please review and place the order again.`
+          );
+          setStep("cart");
+        } else {
+          setSubmitError(err instanceof Error ? err.message : "Connection error. Please check your internet and try again.");
+        }
       }
     } finally {
       setSubmitting(false);
@@ -478,6 +489,12 @@ function OrdersPageContent() {
   if (step === "cart") return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
       <Header onBack={() => setStep("products")} title="Your Cart" />
+
+      {submitError && (
+        <div className="mx-4 mt-3 flex items-center gap-2 bg-red-50 border border-red-100 rounded-xl px-4 py-3 text-red-600 text-sm">
+          <AlertCircle size={16} />{submitError}
+        </div>
+      )}
 
       <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2">
         {cartItems.map((item: CartItem) => (

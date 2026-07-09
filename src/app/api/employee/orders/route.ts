@@ -105,13 +105,21 @@ export async function POST(request: NextRequest) {
     if (!customer) return NextResponse.json({ error: "Customer not found or does not belong to you" }, { status: 404 });
 
     // Verify all products exist
-    const productIds = items.map((i) => i.productId);
+    const productIds = [...new Set(items.map((i) => i.productId))];
     const products = await prisma.product.findMany({
       where: { id: { in: productIds }, isActive: true },
       select: { id: true, name: true, price: true, stock: true },
     });
     if (products.length !== productIds.length) {
-      return NextResponse.json({ error: "One or more products are unavailable. Please refresh and try again." }, { status: 400 });
+      const foundIds = new Set(products.map((p) => p.id));
+      const unavailableProductIds = productIds.filter((id) => !foundIds.has(id));
+      return NextResponse.json(
+        {
+          error: "One or more products are unavailable. Please remove them and try again.",
+          unavailableProductIds,
+        },
+        { status: 400 }
+      );
     }
 
     const paidItems = items.map((i) => ({

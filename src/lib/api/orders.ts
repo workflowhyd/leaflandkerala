@@ -101,8 +101,12 @@ export async function placeOrder(payload: PlaceOrderInput): Promise<PlacedOrder>
   });
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
-    const error = new Error(data.error ?? "Failed to submit order.") as Error & { status?: number };
+    const error = new Error(data.error ?? "Failed to submit order.") as Error & {
+      status?: number;
+      unavailableProductIds?: string[];
+    };
     error.status = res.status;
+    error.unavailableProductIds = data.unavailableProductIds;
     throw error;
   }
   return res.json();
