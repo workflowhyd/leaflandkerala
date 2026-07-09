@@ -3,7 +3,7 @@ import { useEffect, useState, useRef, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import {
   ArrowLeft, Plus, Minus, Search, Trash2, MapPin, CheckCircle,
-  ChevronRight, ShoppingCart, X, AlertCircle, Camera, MessageCircle,
+  ChevronLeft, ChevronRight, ShoppingCart, X, AlertCircle, Camera, MessageCircle,
   Home, ExternalLink, RefreshCw, Navigation, Image as ImageIcon, Check,
 } from "lucide-react";
 import { useCart, CartItem } from "@/components/employee/cart-context";
@@ -138,6 +138,7 @@ function OrdersPageContent() {
   const [step, setStep] = useState<Step>(searchParams.get("new") === "1" ? "products" : "list");
   const [productQuery, setProductQuery] = useState("");
   const [debouncedProductQuery, setDebouncedProductQuery] = useState("");
+  const [productPage, setProductPage] = useState(1);
   const [customerQuery, setCustomerQuery] = useState("");
   const [debouncedCustomerQuery, setDebouncedCustomerQuery] = useState("");
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
@@ -192,8 +193,10 @@ function OrdersPageContent() {
   const orders = ordersQuery.data ?? [];
   const loadingOrders = ordersQuery.isFetching;
 
-  const productSearchQuery = useProductSearch(debouncedProductQuery);
-  const products = productSearchQuery.data ?? [];
+  const productSearchQuery = useProductSearch(debouncedProductQuery, productPage);
+  const products = productSearchQuery.data?.products ?? [];
+  const productTotal = productSearchQuery.data?.total ?? 0;
+  const productTotalPages = Math.max(1, Math.ceil(productTotal / 10));
   const searchingProducts = productSearchQuery.isFetching;
 
   const customerSearchEnabled = step === "customer" && debouncedCustomerQuery.length > 0;
@@ -206,7 +209,10 @@ function OrdersPageContent() {
 
   useEffect(() => {
     if (productTimer.current) clearTimeout(productTimer.current);
-    productTimer.current = setTimeout(() => setDebouncedProductQuery(productQuery), 250);
+    productTimer.current = setTimeout(() => {
+      setDebouncedProductQuery(productQuery);
+      setProductPage(1);
+    }, 250);
     return () => { if (productTimer.current) clearTimeout(productTimer.current); };
   }, [productQuery]);
 
@@ -399,7 +405,33 @@ function OrdersPageContent() {
           );
         })}
         {!searchingProducts && products.length === 0 && (
-          <p className="text-center text-gray-400 text-sm pt-8">{productQuery ? "No products found" : "Type to search products"}</p>
+          <p className="text-center text-gray-400 text-sm pt-8">{productQuery ? "No products found" : "No products available"}</p>
+        )}
+        {productTotal > 10 && (
+          <div className="flex items-center justify-between pt-2">
+            <p className="text-xs text-gray-400">
+              {(productPage - 1) * 10 + 1}–{Math.min(productPage * 10, productTotal)} of {productTotal}
+            </p>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setProductPage((p) => Math.max(1, p - 1))}
+                disabled={productPage === 1}
+                className="w-8 h-8 rounded-full border border-gray-200 bg-white flex items-center justify-center text-gray-600 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <ChevronLeft size={16} />
+              </button>
+              <span className="text-xs text-gray-500 font-medium min-w-[3.5rem] text-center">
+                Page {productPage} / {productTotalPages}
+              </span>
+              <button
+                onClick={() => setProductPage((p) => Math.min(productTotalPages, p + 1))}
+                disabled={productPage === productTotalPages}
+                className="w-8 h-8 rounded-full border border-gray-200 bg-white flex items-center justify-center text-gray-600 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <ChevronRight size={16} />
+              </button>
+            </div>
+          </div>
         )}
       </div>
 

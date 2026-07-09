@@ -64,8 +64,16 @@ export async function fetchOrdersList(view: "week" | "all"): Promise<EmployeeOrd
   return res.json();
 }
 
-export async function searchProducts(query: string): Promise<Product[]> {
-  const res = await fetch(`/api/employee/products?q=${encodeURIComponent(query)}`);
+export interface ProductSearchResult {
+  products: Product[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+export async function searchProducts(query: string, page = 1): Promise<ProductSearchResult> {
+  const params = new URLSearchParams({ q: query, page: String(page) });
+  const res = await fetch(`/api/employee/products?${params.toString()}`);
   if (!res.ok) throw new Error("Failed to search products");
   return res.json();
 }

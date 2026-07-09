@@ -199,7 +199,7 @@ export default function ProductsPage() {
   const [category, setCategory] = useState("");
   const [isActive, setIsActive] = useState("");
   const [page, setPage] = useState(1);
-  const limit = 20;
+  const limit = 10;
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [editProduct, setEditProduct] = useState<Product | null>(null);
