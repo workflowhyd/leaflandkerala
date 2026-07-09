@@ -79,12 +79,16 @@ async function downloadWeekPDF(data: WeekData) {
     for (const order of emp.orders) {
       if (y > 260) { doc.addPage(); y = 20; }
       // Order header line
+      const orderNumText = `  ${order.orderNumber}`;
       doc.setTextColor(30, 77, 61);
-      doc.text(`  ${order.orderNumber}`, 20, y);
+      doc.text(orderNumText, 20, y);
+      const customerX = 20 + doc.getTextWidth(orderNumText) + 2;
+      const customerText = ` · ${order.customer.name}${order.customer.village ? ` (${order.customer.village})` : ""} · ₹${order.totalAmount.toLocaleString("en-IN")}`;
       doc.setTextColor(26, 26, 26);
-      doc.text(` · ${order.customer.name}${order.customer.village ? ` (${order.customer.village})` : ""} · ₹${order.totalAmount.toLocaleString("en-IN")}`, 42, y);
+      doc.text(customerText, customerX, y);
+      const statusX = Math.max(155, customerX + doc.getTextWidth(customerText) + 2);
       doc.setTextColor(100, 116, 139);
-      doc.text(` [${order.status.replace(/_/g, " ")}]`, 155, y);
+      doc.text(` [${order.status.replace(/_/g, " ")}]`, statusX, y);
       y += 5;
       // Product names per order
       if (order.items && order.items.length > 0) {

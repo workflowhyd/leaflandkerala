@@ -4,11 +4,11 @@ import { useSearchParams, useRouter } from "next/navigation";
 import {
   ArrowLeft, Plus, Minus, Search, Trash2, MapPin, CheckCircle,
   ChevronLeft, ChevronRight, ShoppingCart, X, AlertCircle, Camera, MessageCircle,
-  Home, ExternalLink, RefreshCw, Navigation, Image as ImageIcon, Check,
+  Home, ExternalLink, RefreshCw, Navigation, Check,
 } from "lucide-react";
 import { useCart, CartItem } from "@/components/employee/cart-context";
 import { compressImageToTarget, ImageTooLargeError } from "@/lib/compress-image";
-import { getCategoryMeta } from "@/lib/category-images";
+import { getCategoryMeta, CATEGORY_META } from "@/lib/category-images";
 import { cloudinaryThumb } from "@/lib/image-thumb";
 import { uploadHousePhoto, getGiftChoicesAllowed } from "@/lib/api/orders";
 import { useOrdersList, useProductSearch, usePlaceOrder, useGiftItems } from "@/hooks/use-employee-orders";
@@ -48,6 +48,8 @@ interface PlacedOrder {
 }
 
 type Step = "list" | "products" | "cart" | "customer" | "gps" | "photo" | "confirm" | "success";
+
+const HOUSE_PHOTO_MAX_BYTES = 160_000;
 
 const STATUS_COLOR: Record<string, string> = {
   NEW: "bg-blue-100 text-blue-700",
@@ -139,6 +141,7 @@ function OrdersPageContent() {
   const [productQuery, setProductQuery] = useState("");
   const [debouncedProductQuery, setDebouncedProductQuery] = useState("");
   const [productPage, setProductPage] = useState(1);
+  const [productCategory, setProductCategory] = useState("");
   const [customerQuery, setCustomerQuery] = useState("");
   const [debouncedCustomerQuery, setDebouncedCustomerQuery] = useState("");
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
@@ -160,7 +163,6 @@ function OrdersPageContent() {
   const productTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const customerTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const galleryInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const handler = () => flushQueue();
@@ -193,7 +195,7 @@ function OrdersPageContent() {
   const orders = ordersQuery.data ?? [];
   const loadingOrders = ordersQuery.isFetching;
 
-  const productSearchQuery = useProductSearch(debouncedProductQuery, productPage);
+  const productSearchQuery = useProductSearch(debouncedProductQuery, productPage, productCategory);
   const products = productSearchQuery.data?.products ?? [];
   const productTotal = productSearchQuery.data?.total ?? 0;
   const productTotalPages = Math.max(1, Math.ceil(productTotal / 10));
@@ -206,6 +208,11 @@ function OrdersPageContent() {
 
   const placeOrderMutation = usePlaceOrder();
   const createCustomerMutation = useCreateCustomer();
+
+  function selectProductCategory(cat: string) {
+    setProductCategory(cat);
+    setProductPage(1);
+  }
 
   useEffect(() => {
     if (productTimer.current) clearTimeout(productTimer.current);
@@ -255,7 +262,7 @@ function OrdersPageContent() {
     setPhotoCompressError("");
     setCompressingPhoto(true);
     try {
-      const compressed = await compressImageToTarget(file);
+      const compressed = await compressImageToTarget(file, { maxBytes: HOUSE_PHOTO_MAX_BYTES });
       setPhotoPreview(compressed);
       setPhotoData(compressed);
       setPhotoUploadStatus("idle");
@@ -370,8 +377,30 @@ function OrdersPageContent() {
         )}
       </Header>
 
-      <div className="px-4 py-3">
+      <div className="px-4 py-3 space-y-2">
         <SearchBar value={productQuery} onChange={setProductQuery} placeholder="Name, serial number or SKU..." loading={searchingProducts} />
+        <div className="flex gap-2 overflow-x-auto pb-1 -mx-4 px-4">
+          <button
+            onClick={() => selectProductCategory("")}
+            className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+              productCategory === "" ? "bg-green-600 text-white border-green-600" : "bg-white text-gray-600 border-gray-200"
+            }`}
+          >
+            All
+          </button>
+          {Object.entries(CATEGORY_META).map(([value, meta]) => (
+            <button
+              key={value}
+              onClick={() => selectProductCategory(value)}
+              className={`shrink-0 flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+                productCategory === value ? "bg-green-600 text-white border-green-600" : "bg-white text-gray-600 border-gray-200"
+              }`}
+            >
+              <span>{meta.emoji}</span>
+              {meta.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 space-y-2 pb-4">
@@ -642,15 +671,10 @@ function OrdersPageContent() {
         )}
 
         <input ref={fileInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handlePhoto} />
-        <input ref={galleryInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhoto} />
         <div className="flex gap-3">
           <button onClick={() => fileInputRef.current?.click()} disabled={compressingPhoto}
             className="flex items-center gap-2 bg-green-600 text-white px-5 py-3 rounded-xl font-medium shadow-sm active:bg-green-700 disabled:opacity-60">
             <Camera size={18} /> {photoPreview ? "Retake" : "Camera"}
-          </button>
-          <button onClick={() => galleryInputRef.current?.click()} disabled={compressingPhoto}
-            className="flex items-center gap-2 border border-gray-200 text-gray-600 px-5 py-3 rounded-xl font-medium bg-white active:bg-gray-50 disabled:opacity-60">
-            <ImageIcon size={18} /> Gallery
           </button>
         </div>
         <p className="text-xs text-gray-400 text-center">Take a photo of the customer&apos;s house entrance</p>

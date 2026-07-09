@@ -71,8 +71,9 @@ export interface ProductSearchResult {
   limit: number;
 }
 
-export async function searchProducts(query: string, page = 1): Promise<ProductSearchResult> {
+export async function searchProducts(query: string, page = 1, category = ""): Promise<ProductSearchResult> {
   const params = new URLSearchParams({ q: query, page: String(page) });
+  if (category) params.set("category", category);
   const res = await fetch(`/api/employee/products?${params.toString()}`);
   if (!res.ok) throw new Error("Failed to search products");
   return res.json();

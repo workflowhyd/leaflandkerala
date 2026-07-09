@@ -31,8 +31,8 @@ const MIN_DIMENSION = 400;
 const QUALITY_STEPS = [0.82, 0.7, 0.58, 0.45, 0.32, 0.2];
 
 export class ImageTooLargeError extends Error {
-  constructor() {
-    super("This image is too large to compress under 200 KB. Please choose a smaller image.");
+  constructor(maxBytes: number = MAX_IMAGE_BYTES) {
+    super(`This image is too large to compress under ${Math.round(maxBytes / 1000)} KB. Please choose a smaller image.`);
     this.name = "ImageTooLargeError";
   }
 }
@@ -68,7 +68,7 @@ function compressViaWorker(file: File, maxBytes: number, maxDimension: number): 
     worker.onmessage = async (e: MessageEvent<CompressWorkerResponse>) => {
       worker.terminate();
       if (!e.data.ok) {
-        reject(e.data.error === "too_large" ? new ImageTooLargeError() : new Error(e.data.error));
+        reject(e.data.error === "too_large" ? new ImageTooLargeError(maxBytes) : new Error(e.data.error));
         return;
       }
       try {
@@ -140,7 +140,7 @@ async function compressOnMainThread(file: File, maxBytes: number, maxDimension: 
     maxDimension = Math.round(maxDimension * 0.75);
   }
 
-  throw new ImageTooLargeError();
+  throw new ImageTooLargeError(maxBytes);
 }
 
 /**

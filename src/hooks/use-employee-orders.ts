@@ -9,10 +9,10 @@ export function useOrdersList(view: "week" | "all", enabled = true) {
   });
 }
 
-export function useProductSearch(term: string, page = 1) {
+export function useProductSearch(term: string, page = 1, category = "") {
   return useQuery({
-    queryKey: ["employee", "products", "search", term, page],
-    queryFn: () => searchProducts(term, page),
+    queryKey: ["employee", "products", "search", term, page, category],
+    queryFn: () => searchProducts(term, page, category),
     staleTime: 30_000,
   });
 }

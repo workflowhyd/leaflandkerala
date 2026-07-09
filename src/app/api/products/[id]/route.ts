@@ -5,7 +5,13 @@ import { z } from "zod";
 
 const updateSchema = z.object({
   name: z.string().min(2).optional(),
-  category: z.enum(["SEEDS", "FERTILIZERS", "PESTICIDES", "ORGANIC_PRODUCTS", "FARMING_TOOLS", "IRRIGATION_SUPPLIES", "AGRICULTURAL_EQUIPMENT"]).optional(),
+  category: z.enum([
+    "SEEDS", "FERTILIZERS", "PESTICIDES", "ORGANIC_PRODUCTS",
+    "FARMING_TOOLS", "IRRIGATION_SUPPLIES", "AGRICULTURAL_EQUIPMENT",
+    "MANGO", "JACKFRUIT", "COCONUT", "SPICES", "ORNAMENTAL_PALMS",
+    "FLOWERS", "INDOOR_PLANTS", "ORNAMENTAL_PLANTS", "TIMBER_TREES",
+    "FRUIT_PLANTS", "GROW_SUPPLIES",
+  ]).optional(),
   description: z.string().optional().nullable(),
   price: z.number().positive().optional(),
   salePrice: z.number().positive().optional().nullable(),
@@ -36,7 +42,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   const body = await request.json();
   const parsed = updateSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.issues }, { status: 400 });
+    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
   const product = await prisma.product.update({
