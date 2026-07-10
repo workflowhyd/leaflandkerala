@@ -422,11 +422,12 @@ function OrdersPageContent() {
             <div key={p.id} className="bg-white rounded-xl p-3 shadow-sm border border-gray-100 flex items-center gap-3">
               <ProductThumb imageUrl={p.imageUrl} category={p.category} serialNumber={p.serialNumber} />
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-xs text-gray-400 font-mono">#{p.serialNumber}</span>
-                  <p className="font-medium text-gray-800 text-sm truncate">{p.name}</p>
+                <p className="font-medium text-gray-800 text-sm line-clamp-2">{p.name}</p>
+                <div className="flex items-center gap-1.5 text-xs text-gray-400">
+                  <span className="font-mono">#{p.serialNumber}</span>
+                  <span>·</span>
+                  <span>{p.category}</span>
                 </div>
-                <p className="text-xs text-gray-400">{p.category}</p>
                 <p className="text-green-700 font-semibold text-sm">₹{price}</p>
               </div>
               {inCart ? (

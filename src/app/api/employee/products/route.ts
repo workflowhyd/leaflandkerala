@@ -21,15 +21,11 @@ export async function GET(request: NextRequest) {
     isActive: true,
     ...(category && { category: category as never }),
     ...(q && {
-      OR: isSerial
-        ? [
-            { serialNumber: { equals: parseInt(q) } },
-            { name: { contains: q, mode: "insensitive" as const } },
-          ]
-        : [
-            { name: { contains: q, mode: "insensitive" as const } },
-            { sku: { contains: q, mode: "insensitive" as const } },
-          ],
+      OR: [
+        { name: { contains: q, mode: "insensitive" as const } },
+        { sku: { contains: q, mode: "insensitive" as const } },
+        ...(isSerial ? [{ serialNumber: { equals: parseInt(q) } }] : []),
+      ],
     }),
   };
 
