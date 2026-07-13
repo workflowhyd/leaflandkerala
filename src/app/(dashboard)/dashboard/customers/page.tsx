@@ -7,7 +7,6 @@ import {
   Eye,
   Star,
   UserCheck,
-  Plus,
   Search,
   Edit,
   Trash2,
@@ -29,7 +28,6 @@ import {
   TableCell,
 } from "@/components/ui/table";
 import { CustomerStatusBadge } from "@/components/customers/customer-status-badge";
-import { AddCustomerModal } from "@/components/customers/add-customer-modal";
 import { useToast } from "@/components/ui/toast";
 import { getStatusLabel } from "@/lib/utils";
 
@@ -111,7 +109,6 @@ export default function CustomersPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
-  const [showAddModal, setShowAddModal] = useState(false);
   const [stats, setStats] = useState<CustomerStats>({ LEAD: 0, VISITED: 0, INTERESTED: 0, ACTIVE: 0 });
   const [deleteCustomer, setDeleteCustomer] = useState<Customer | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
@@ -193,10 +190,6 @@ export default function CustomersPage() {
           <h1 className="text-xl font-bold text-[#1a1a1a] lg:text-2xl">Customers</h1>
           <p className="text-sm text-[#64748b] mt-0.5">Manage and track your customer base</p>
         </div>
-        <Button onClick={() => setShowAddModal(true)} className="hidden sm:flex">
-          <Plus className="h-4 w-4" />
-          Add Customer
-        </Button>
       </div>
 
       {/* Stats */}
@@ -246,7 +239,7 @@ export default function CustomersPage() {
           <Users className="h-12 w-12 text-[#64748b]/40 mb-3" />
           <p className="text-[#64748b] font-medium">No customers found</p>
           <p className="text-sm text-[#64748b]/70 mt-1">
-            {search || statusFilter ? "Try adjusting your filters" : "Add your first customer to get started"}
+            {search || statusFilter ? "Try adjusting your filters" : "No customers yet"}
           </p>
         </div>
       ) : (
@@ -438,16 +431,6 @@ export default function CustomersPage() {
         </>
       )}
 
-      <AddCustomerModal
-        open={showAddModal}
-        onClose={() => setShowAddModal(false)}
-        onSuccess={() => {
-          success("Customer added successfully");
-          fetchCustomers();
-          fetchStats();
-        }}
-      />
-
       <DeleteConfirmModal
         open={!!deleteCustomer}
         customerName={deleteCustomer?.name ?? ""}
@@ -455,15 +438,6 @@ export default function CustomersPage() {
         onConfirm={handleDelete}
         onCancel={() => setDeleteCustomer(null)}
       />
-
-      {/* Mobile FAB */}
-      <button
-        onClick={() => setShowAddModal(true)}
-        className="fixed bottom-20 right-4 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-[#1E4D3D] text-white shadow-lg active:scale-95 transition-transform sm:hidden"
-        aria-label="Add customer"
-      >
-        <Plus className="h-6 w-6" />
-      </button>
     </div>
   );
 }
