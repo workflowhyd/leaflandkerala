@@ -44,7 +44,7 @@ export async function GET(request: NextRequest) {
   if (isActive !== null && isActive !== "") where.isActive = isActive === "true";
 
   try {
-    const [products, total] = await Promise.all([
+    let [products, total] = await Promise.all([
       prisma.product.findMany({
         where,
         orderBy: { createdAt: "desc" },
@@ -53,6 +53,19 @@ export async function GET(request: NextRequest) {
       }),
       prisma.product.count({ where }),
     ]);
+
+    // If the requested page no longer exists (e.g. the last item on it was
+    // just deleted), fall back to the last valid page instead of returning
+    // an empty list while matching records still exist.
+    if (products.length === 0 && total > 0 && page > 1) {
+      const safePage = Math.max(1, Math.ceil(total / limit));
+      products = await prisma.product.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        skip: (safePage - 1) * limit,
+        take: limit,
+      });
+    }
 
     return NextResponse.json({ products, total, page, limit });
   } catch (err) {

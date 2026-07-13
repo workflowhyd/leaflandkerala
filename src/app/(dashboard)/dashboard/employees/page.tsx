@@ -125,7 +125,7 @@ export default function EmployeesPage() {
         search,
         status: statusFilter,
       });
-      const res = await fetch(`/api/employees?${params}`);
+      const res = await fetch(`/api/employees?${params}`, { cache: "no-store" });
       if (res.ok) {
         const data = await res.json();
         setEmployees(data.employees);
@@ -137,6 +137,15 @@ export default function EmployeesPage() {
   }, [page, search, statusFilter]);
 
   useEffect(() => { fetchEmployees(); }, [fetchEmployees]);
+
+  // Refetch when the tab regains focus so edits made elsewhere aren't missed.
+  useEffect(() => {
+    const onVisible = () => {
+      if (!document.hidden) fetchEmployees();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [fetchEmployees]);
 
   const handleToggleActive = async () => {
     if (!toggleEmployee) return;
@@ -153,7 +162,13 @@ export default function EmployeesPage() {
           toggleEmployee.name
         );
         setToggleEmployee(null);
-        fetchEmployees();
+        // Toggling active status removes the employee from the current
+        // page's result set if filtering by a specific status (but not "all").
+        if (employees.length === 1 && page > 1 && statusFilter !== "all") {
+          setPage((p) => p - 1);
+        } else {
+          fetchEmployees();
+        }
       } else {
         toastError("Failed to update employee");
       }

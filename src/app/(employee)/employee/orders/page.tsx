@@ -993,8 +993,8 @@ function SearchBar({ value, onChange, placeholder, loading }: {
   return (
     <div className="flex items-center gap-2 bg-white rounded-xl px-3 py-2 shadow-sm border border-gray-100">
       <Search size={18} className="text-gray-400 shrink-0" />
-      <input autoFocus value={value} onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder} className="flex-1 text-sm outline-none bg-transparent" />
+      <input autoFocus autoComplete="off" value={value} onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder} aria-label={placeholder} className="flex-1 text-sm outline-none bg-transparent" />
       {loading && <div className="w-4 h-4 border-2 border-green-500 border-t-transparent rounded-full animate-spin shrink-0" />}
       {value && <button onClick={() => onChange("")}><X size={15} className="text-gray-300" /></button>}
     </div>

@@ -45,7 +45,7 @@ export async function GET(request: NextRequest) {
   }
   if (status) where.status = status;
 
-  const [orders, total, statusCounts, scopedTotal] = await Promise.all([
+  let [orders, total, statusCounts, scopedTotal] = await Promise.all([
     prisma.order.findMany({
       where,
       orderBy: { createdAt: "desc" },
@@ -64,6 +64,24 @@ export async function GET(request: NextRequest) {
     prisma.order.groupBy({ by: ["status"], where: scopeWhere, _count: { status: true } }),
     prisma.order.count({ where: scopeWhere }),
   ]);
+
+  // If the requested page no longer exists (e.g. the last order on it was
+  // just cancelled/reassigned), fall back to the last valid page instead of
+  // returning an empty list while matching records still exist.
+  if (orders.length === 0 && total > 0 && page > 1) {
+    const safePage = Math.max(1, Math.ceil(total / limit));
+    orders = await prisma.order.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      skip: (safePage - 1) * limit,
+      take: limit,
+      include: {
+        customer: { select: { name: true, mobile: true, address: true } },
+        employee: { select: { name: true } },
+        items: { include: { product: { select: { name: true } } } },
+      },
+    });
+  }
 
   const counts = {
     total: scopedTotal,

@@ -121,7 +121,7 @@ export default function CustomersPage() {
     setLoading(true);
     try {
       const params = new URLSearchParams({ page: String(page), limit: String(limit), search, status: statusFilter });
-      const res = await fetch(`/api/customers?${params}`);
+      const res = await fetch(`/api/customers?${params}`, { cache: "no-store" });
       if (res.ok) {
         const data = await res.json();
         setCustomers(data.customers);
@@ -150,6 +150,18 @@ export default function CustomersPage() {
   useEffect(() => { fetchCustomers(); }, [fetchCustomers]);
   useEffect(() => { fetchStats(); }, [fetchStats]);
 
+  // Refetch when the tab regains focus so edits made elsewhere aren't missed.
+  useEffect(() => {
+    const onVisible = () => {
+      if (!document.hidden) {
+        fetchCustomers();
+        fetchStats();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [fetchCustomers, fetchStats]);
+
   const handleDelete = async () => {
     if (!deleteCustomer) return;
     setDeleteLoading(true);
@@ -158,7 +170,8 @@ export default function CustomersPage() {
       if (res.ok) {
         success("Customer deleted", deleteCustomer.name);
         setDeleteCustomer(null);
-        fetchCustomers();
+        if (customers.length === 1 && page > 1) setPage((p) => p - 1);
+        else fetchCustomers();
         fetchStats();
       } else {
         toastError("Failed to delete customer");
@@ -202,6 +215,10 @@ export default function CustomersPage() {
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#64748b]" />
               <input
                 type="text"
+                name="customer-search"
+                id="customer-search"
+                autoComplete="off"
+                aria-label="Search customers by name, mobile, or village"
                 placeholder="Search by name, mobile, village..."
                 value={search}
                 onChange={(e) => { setSearch(e.target.value); setPage(1); }}

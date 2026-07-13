@@ -214,7 +214,7 @@ export default function OrdersPage() {
     const params = new URLSearchParams({ page: String(page), limit: "20" });
     if (debouncedSearch) params.set("search", debouncedSearch);
     if (status) params.set("status", status);
-    const res = await fetch(`/api/orders?${params}`);
+    const res = await fetch(`/api/orders?${params}`, { cache: "no-store" });
     if (res.ok) {
       const data = await res.json();
       setOrders(data.orders);
@@ -225,6 +225,15 @@ export default function OrdersPage() {
   }, [page, debouncedSearch, status]);
 
   useEffect(() => { fetchOrders(); }, [fetchOrders]);
+
+  // Refetch when the tab regains focus so edits made elsewhere aren't missed.
+  useEffect(() => {
+    const onVisible = () => {
+      if (!document.hidden) fetchOrders();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [fetchOrders]);
 
   const handleExport = () => {
     const rows = orders.map((o) => ({
@@ -251,7 +260,13 @@ export default function OrdersPage() {
       if (res.ok) {
         success("Order cancelled", cancelOrder.orderNumber);
         setCancelOrder(null);
-        fetchOrders();
+        // Cancelling removes the order from the current page's result set
+        // if filtering by a specific status other than CANCELLED.
+        if (orders.length === 1 && page > 1 && status !== "") {
+          setPage((p) => p - 1);
+        } else {
+          fetchOrders();
+        }
       } else {
         toastError("Failed to cancel order");
       }

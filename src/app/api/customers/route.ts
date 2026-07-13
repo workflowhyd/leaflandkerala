@@ -46,7 +46,7 @@ export async function GET(request: NextRequest) {
   }
   if (status) where.status = status;
 
-  const [customers, total] = await Promise.all([
+  let [customers, total] = await Promise.all([
     prisma.customer.findMany({
       where,
       orderBy: { createdAt: "desc" },
@@ -61,6 +61,25 @@ export async function GET(request: NextRequest) {
     }),
     prisma.customer.count({ where }),
   ]);
+
+  // If the requested page no longer exists (e.g. the last item on it was
+  // just deleted), fall back to the last valid page instead of returning
+  // an empty list while matching records still exist.
+  if (customers.length === 0 && total > 0 && page > 1) {
+    const safePage = Math.max(1, Math.ceil(total / limit));
+    customers = await prisma.customer.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      skip: (safePage - 1) * limit,
+      take: limit,
+      include: {
+        employee: { select: { name: true } },
+        location: true,
+        photos: { take: 1, where: { isFront: true } },
+        _count: { select: { orders: true, fieldVisits: true } },
+      },
+    });
+  }
 
   return NextResponse.json({ customers, total, page, limit });
 }

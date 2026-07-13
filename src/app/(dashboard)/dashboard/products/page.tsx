@@ -225,6 +225,7 @@ export default function ProductsPage() {
 
       const res = await fetch(`/api/products?${params.toString()}`, {
         credentials: "same-origin",
+        cache: "no-store",
       });
       const data = await res.json().catch(() => null);
       if (!res.ok) throw new Error(data?.error || "Failed to fetch");
@@ -239,6 +240,15 @@ export default function ProductsPage() {
 
   useEffect(() => {
     fetchProducts();
+  }, [fetchProducts]);
+
+  // Refetch when the tab regains focus so edits made elsewhere aren't missed.
+  useEffect(() => {
+    const onVisible = () => {
+      if (!document.hidden) fetchProducts();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
   }, [fetchProducts]);
 
   async function handleToggleStatus(product: Product) {
@@ -273,7 +283,8 @@ export default function ProductsPage() {
       }
       success("Product deleted", deleteProduct.name);
       setDeleteProduct(null);
-      fetchProducts();
+      if (products.length === 1 && page > 1) setPage((p) => p - 1);
+      else fetchProducts();
     } catch {
       toastError("Failed to delete product");
     } finally {
@@ -310,6 +321,10 @@ export default function ProductsPage() {
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#64748b]" />
               <input
                 type="text"
+                name="product-search"
+                id="product-search"
+                autoComplete="off"
+                aria-label="Search products by name or SKU"
                 placeholder="Search by name or SKU..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
