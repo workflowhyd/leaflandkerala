@@ -16,9 +16,10 @@ interface BottomNavItem {
 interface BottomNavProps {
   userRole: "ADMIN" | "EMPLOYEE";
   notificationCount?: number;
+  onNavigate?: () => void;
 }
 
-export function BottomNav({ userRole, notificationCount = 0 }: BottomNavProps) {
+export function BottomNav({ userRole, notificationCount = 0, onNavigate }: BottomNavProps) {
   const pathname = usePathname();
 
   const items: BottomNavItem[] = [
@@ -51,6 +52,9 @@ export function BottomNav({ userRole, notificationCount = 0 }: BottomNavProps) {
           <Link
             key={item.href}
             href={item.href}
+            onClick={() => {
+              if (item.href !== pathname) onNavigate?.();
+            }}
             className={cn(
               "flex flex-1 flex-col items-center justify-center gap-1 py-2 text-[10px] font-medium transition-colors",
               active ? "text-[#1E4D3D]" : "text-[#94a3b8]"

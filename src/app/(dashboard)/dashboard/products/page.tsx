@@ -27,7 +27,7 @@ import {
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
-import { cn, formatCurrency, getStatusLabel } from "@/lib/utils";
+import { cn, formatCurrency } from "@/lib/utils";
 import { getCategoryMeta } from "@/lib/category-images";
 
 interface Product {
@@ -46,7 +46,6 @@ interface Product {
 }
 
 const CATEGORY_OPTIONS = [
-  { value: "", label: "All Categories" },
   { value: "MANGO", label: "Mango" },
   { value: "JACKFRUIT", label: "Jackfruit" },
   { value: "COCONUT", label: "Coconut" },
@@ -68,7 +67,6 @@ const CATEGORY_OPTIONS = [
 ];
 
 const STATUS_OPTIONS = [
-  { value: "", label: "All Status" },
   { value: "true", label: "Active" },
   { value: "false", label: "Inactive" },
 ];
@@ -438,7 +436,7 @@ export default function ProductsPage() {
                     }
                     className="flex-shrink-0 text-[10px]"
                   >
-                    {getStatusLabel(product.category)}
+                    {getCategoryMeta(product.category).label}
                   </Badge>
                 </div>
                 <p className="mb-3 font-mono text-xs text-[#94a3b8]">
@@ -530,7 +528,7 @@ export default function ProductsPage() {
                         }
                         className="flex-shrink-0 text-[10px]"
                       >
-                        {getStatusLabel(product.category)}
+                        {getCategoryMeta(product.category).label}
                       </Badge>
                     </div>
                     <p className="font-mono text-xs text-[#94a3b8] mb-1.5">
@@ -643,7 +641,7 @@ export default function ProductsPage() {
                             | "outline") || "default"
                         }
                       >
-                        {getStatusLabel(product.category)}
+                        {getCategoryMeta(product.category).label}
                       </Badge>
                     </TableCell>
                     <TableCell className="font-semibold">

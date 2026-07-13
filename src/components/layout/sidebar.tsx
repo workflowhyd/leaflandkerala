@@ -34,12 +34,13 @@ interface SidebarProps {
   userName: string;
   onLogout: () => void;
   onClose?: () => void;
+  onNavigate?: () => void;
   isMobile?: boolean;
   notificationCount?: number;
   pendingReturnsCount?: number;
 }
 
-export function Sidebar({ userRole, userName, onLogout, onClose, isMobile, notificationCount = 0, pendingReturnsCount = 0 }: SidebarProps) {
+export function Sidebar({ userRole, userName, onLogout, onClose, onNavigate, isMobile, notificationCount = 0, pendingReturnsCount = 0 }: SidebarProps) {
   const pathname = usePathname();
 
   const navItems: NavItem[] = [
@@ -116,7 +117,10 @@ export function Sidebar({ userRole, userName, onLogout, onClose, isMobile, notif
               <li key={item.href}>
                 <Link
                   href={item.href}
-                  onClick={isMobile ? onClose : undefined}
+                  onClick={() => {
+                    if (item.href !== pathname) onNavigate?.();
+                    if (isMobile) onClose?.();
+                  }}
                   className={cn(
                     "group flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150",
                     active

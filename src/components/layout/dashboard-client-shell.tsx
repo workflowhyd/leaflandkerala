@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { SessionPayload } from "@/lib/auth";
 import { Sidebar } from "./sidebar";
@@ -52,14 +52,23 @@ export function DashboardClientShell({
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [notificationCount, setNotificationCount] = useState(0);
   const [pendingReturnsCount, setPendingReturnsCount] = useState(0);
+  const [isNavigating, setIsNavigating] = useState(false);
+  const navTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const pageTitle = getPageTitle(pathname);
+
+  const handleNavigate = () => {
+    setIsNavigating(true);
+    if (navTimeoutRef.current) clearTimeout(navTimeoutRef.current);
+    navTimeoutRef.current = setTimeout(() => setIsNavigating(false), 8000);
+  };
 
   // Fetch notification count for admin
   useEffect(() => {
     if (session.role !== "ADMIN") return;
     const fetchCount = () => {
-      fetch("/api/admin/notifications")
+      if (document.hidden) return;
+      fetch("/api/admin/notifications/count")
         .then((r) => r.ok ? r.json() : null)
         .then((d) => {
           if (d?.pendingRegistrations !== undefined) setNotificationCount(d.pendingRegistrations);
@@ -68,14 +77,30 @@ export function DashboardClientShell({
         .catch(() => {});
     };
     fetchCount();
-    const interval = setInterval(fetchCount, 60_000);
-    return () => clearInterval(interval);
+    const interval = setInterval(fetchCount, 120_000);
+    document.addEventListener("visibilitychange", fetchCount);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", fetchCount);
+    };
   }, [session.role]);
 
-  // Close drawer on route change
+  // Close drawer and clear nav-loading state on route change
   useEffect(() => {
     setMobileMenuOpen(false);
+    setIsNavigating(false);
+    if (navTimeoutRef.current) {
+      clearTimeout(navTimeoutRef.current);
+      navTimeoutRef.current = null;
+    }
   }, [pathname]);
+
+  // Clear pending safety timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (navTimeoutRef.current) clearTimeout(navTimeoutRef.current);
+    };
+  }, []);
 
   // Prevent body scroll + handle Escape key when drawer is open
   useEffect(() => {
@@ -120,6 +145,7 @@ export function DashboardClientShell({
             userRole={session.role}
             userName={session.name}
             onLogout={handleLogout}
+            onNavigate={handleNavigate}
             notificationCount={notificationCount}
             pendingReturnsCount={pendingReturnsCount}
           />
@@ -142,6 +168,7 @@ export function DashboardClientShell({
                 userName={session.name}
                 onLogout={handleLogout}
                 onClose={() => setMobileMenuOpen(false)}
+                onNavigate={handleNavigate}
                 isMobile
                 notificationCount={notificationCount}
                 pendingReturnsCount={pendingReturnsCount}
@@ -160,10 +187,13 @@ export function DashboardClientShell({
             onLogout={handleLogout}
             onMenuToggle={() => setMobileMenuOpen((prev) => !prev)}
           />
+          {isNavigating && (
+            <div className="h-0.5 w-full flex-shrink-0 animate-pulse bg-[#1E4D3D]" />
+          )}
           <main className="flex-1 overflow-y-auto p-4 pb-20 lg:p-6 lg:pb-6">
             {children}
           </main>
-          <BottomNav userRole={session.role} notificationCount={notificationCount} />
+          <BottomNav userRole={session.role} notificationCount={notificationCount} onNavigate={handleNavigate} />
         </div>
       </div>
     </ToastProvider>

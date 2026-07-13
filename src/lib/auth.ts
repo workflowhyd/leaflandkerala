@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { createSupabaseServerClient } from "./supabase/server";
 import { prisma } from "./prisma";
 
@@ -9,7 +10,7 @@ export interface SessionPayload {
   employeeId?: string;
 }
 
-export async function getSession(): Promise<SessionPayload | null> {
+export const getSession = cache(async (): Promise<SessionPayload | null> => {
   const supabase = await createSupabaseServerClient();
   // getSession() reads the JWT from the cookie locally — no network call.
   // The middleware already validated the token with getUser() before this runs.
@@ -33,4 +34,4 @@ export async function getSession(): Promise<SessionPayload | null> {
     role: profile.role as "ADMIN" | "EMPLOYEE",
     employeeId: profile.employee?.id,
   };
-}
+});

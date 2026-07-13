@@ -56,6 +56,7 @@ async function getDashboardData() {
         paymentsThisWeek,
         totalCommissionPaid,
       ],
+      commissionSummary,
     ] = await Promise.all([
       Promise.all([
         prisma.order.count({ where: { createdAt: { gte: startOfDay, lte: endOfDay }, status: { not: "CANCELLED" } } }),
@@ -119,14 +120,13 @@ async function getDashboardData() {
         }),
         prisma.employeePayment.aggregate({ _sum: { amount: true } }),
       ]),
+      prisma.employee.findMany({
+        where: { isActive: true },
+        select: { id: true, name: true, weeklySales: true, monthlySales: true, commissionRate: true, commissionAmount: true },
+        orderBy: { monthlySales: "desc" },
+        take: 10,
+      }),
     ]);
-
-    const commissionSummary = await prisma.employee.findMany({
-      where: { isActive: true },
-      select: { id: true, name: true, weeklySales: true, monthlySales: true, commissionRate: true, commissionAmount: true },
-      orderBy: { monthlySales: "desc" },
-      take: 10,
-    });
 
     const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
     const dailyMap = new Map<string, number>();

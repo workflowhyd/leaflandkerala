@@ -31,6 +31,7 @@ import {
   getStatusColor,
   getStatusLabel,
 } from "@/lib/utils";
+import { getCategoryMeta } from "@/lib/category-images";
 
 interface Product {
   id: string;
@@ -278,7 +279,7 @@ export default function ProductDetailPage() {
                   <CardTitle className="text-xl">{product.name}</CardTitle>
                   <p className="mt-1 font-mono text-sm text-[#94a3b8]">{product.sku}</p>
                 </div>
-                <Badge variant="default">{getStatusLabel(product.category)}</Badge>
+                <Badge variant="default">{getCategoryMeta(product.category).label}</Badge>
               </div>
             </CardHeader>
             <CardContent>
