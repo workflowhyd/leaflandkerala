@@ -17,6 +17,7 @@ import { ProductFormModal } from "@/components/products/product-form-modal";
 import { useToast } from "@/components/ui/toast";
 import { cloudinaryThumb } from "@/lib/image-thumb";
 import {
+  Plus,
   Search,
   LayoutGrid,
   List,
@@ -198,6 +199,7 @@ export default function ProductsPage() {
   const [page, setPage] = useState(1);
   const limit = 10;
 
+  const [showAddModal, setShowAddModal] = useState(false);
   const [editProduct, setEditProduct] = useState<Product | null>(null);
   const [deleteProduct, setDeleteProduct] = useState<Product | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
@@ -304,6 +306,11 @@ export default function ProductsPage() {
             {total} product{total !== 1 ? "s" : ""} in catalogue
           </p>
         </div>
+        {/* Desktop add button */}
+        <Button onClick={() => setShowAddModal(true)} className="hidden sm:flex">
+          <Plus className="h-4 w-4" />
+          Add Product
+        </Button>
       </div>
 
       {/* Filters */}
@@ -389,9 +396,15 @@ export default function ProductsPage() {
             <p className="mt-1 text-sm text-[#64748b]">
               {search || category || isActive
                 ? "Try adjusting your filters"
-                : "No products in the catalogue yet"}
+                : "Add your first product to get started"}
             </p>
           </div>
+          {!search && !category && !isActive && (
+            <Button size="sm" onClick={() => setShowAddModal(true)}>
+              <Plus className="h-3.5 w-3.5" />
+              Add Product
+            </Button>
+          )}
         </div>
       ) : view === "grid" ? (
         /* Grid view — works well on all sizes */
@@ -752,13 +765,19 @@ export default function ProductsPage() {
         </div>
       )}
 
-      {/* Edit modal */}
+      {/* Add / Edit modal */}
       <ProductFormModal
-        open={!!editProduct}
-        onClose={() => setEditProduct(null)}
+        open={showAddModal || !!editProduct}
+        onClose={() => {
+          setShowAddModal(false);
+          setEditProduct(null);
+        }}
         onSuccess={() => {
           fetchProducts();
-          success("Product updated", editProduct?.name);
+          success(
+            editProduct ? "Product updated" : "Product added",
+            editProduct?.name
+          );
         }}
         product={editProduct}
       />
@@ -771,6 +790,15 @@ export default function ProductsPage() {
         onConfirm={handleDelete}
         onCancel={() => setDeleteProduct(null)}
       />
+
+      {/* Mobile FAB */}
+      <button
+        onClick={() => setShowAddModal(true)}
+        className="fixed bottom-20 right-4 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-[#1E4D3D] text-white shadow-lg active:scale-95 transition-transform sm:hidden"
+        aria-label="Add product"
+      >
+        <Plus className="h-6 w-6" />
+      </button>
     </div>
   );
 }
