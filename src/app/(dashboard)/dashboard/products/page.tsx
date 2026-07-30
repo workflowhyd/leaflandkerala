@@ -46,6 +46,7 @@ interface Product {
 }
 
 const CATEGORY_OPTIONS = [
+  { value: "", label: "All Categories" },
   { value: "MANGO", label: "Mango" },
   { value: "JACKFRUIT", label: "Jackfruit" },
   { value: "COCONUT", label: "Coconut" },
@@ -67,6 +68,7 @@ const CATEGORY_OPTIONS = [
 ];
 
 const STATUS_OPTIONS = [
+  { value: "", label: "All Status" },
   { value: "true", label: "Active" },
   { value: "false", label: "Inactive" },
 ];
@@ -340,7 +342,6 @@ export default function ProductsPage() {
                 setCategory(e.target.value);
                 setPage(1);
               }}
-              placeholder="All Categories"
             />
           </div>
           <div className="w-full sm:w-[130px]">
@@ -351,7 +352,6 @@ export default function ProductsPage() {
                 setIsActive(e.target.value);
                 setPage(1);
               }}
-              placeholder="All Status"
             />
           </div>
           <div className="flex items-center gap-1 rounded-md border border-[#e2e8f0] p-1">
