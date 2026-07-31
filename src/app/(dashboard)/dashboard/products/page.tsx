@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
@@ -29,21 +29,11 @@ import {
 } from "lucide-react";
 import { cn, formatCurrency } from "@/lib/utils";
 import { getCategoryMeta } from "@/lib/category-images";
-
-interface Product {
-  id: string;
-  name: string;
-  category: string;
-  description?: string | null;
-  price: number;
-  salePrice?: number | null;
-  sku: string;
-  stock: number;
-  imageUrl?: string | null;
-  imagePublicId?: string | null;
-  isActive: boolean;
-  createdAt: string;
-}
+import type { AdminProduct as Product } from "@/lib/api/products";
+import {
+  useAdminProducts,
+  useInvalidateAdminProducts,
+} from "@/hooks/use-admin-products";
 
 const CATEGORY_OPTIONS = [
   { value: "", label: "All Categories" },
@@ -189,9 +179,6 @@ function DeleteConfirmModal({
 
 export default function ProductsPage() {
   const { success, error: toastError } = useToast();
-  const [products, setProducts] = useState<Product[]>([]);
-  const [total, setTotal] = useState(0);
-  const [loading, setLoading] = useState(true);
   const [view, setView] = useState<"table" | "grid">("table");
 
   const [search, setSearch] = useState("");
@@ -214,44 +201,20 @@ export default function ProductsPage() {
     return () => clearTimeout(t);
   }, [search]);
 
-  const fetchProducts = useCallback(async () => {
-    setLoading(true);
-    try {
-      const params = new URLSearchParams({
-        page: String(page),
-        limit: String(limit),
-      });
-      if (debouncedSearch) params.set("search", debouncedSearch);
-      if (category) params.set("category", category);
-      if (isActive !== "") params.set("isActive", isActive);
-
-      const res = await fetch(`/api/products?${params.toString()}`, {
-        credentials: "same-origin",
-        cache: "no-store",
-      });
-      const data = await res.json().catch(() => null);
-      if (!res.ok) throw new Error(data?.error || "Failed to fetch");
-      setProducts(data.products);
-      setTotal(data.total);
-    } catch {
-      toastError("Failed to load products");
-    } finally {
-      setLoading(false);
-    }
-  }, [debouncedSearch, category, isActive, page, toastError]);
+  const invalidateProducts = useInvalidateAdminProducts();
+  const { data, isLoading, isError } = useAdminProducts({
+    search: debouncedSearch,
+    category,
+    isActive,
+    page,
+    limit,
+  });
+  const products = data?.products ?? [];
+  const total = data?.total ?? 0;
 
   useEffect(() => {
-    fetchProducts();
-  }, [fetchProducts]);
-
-  // Refetch when the tab regains focus so edits made elsewhere aren't missed.
-  useEffect(() => {
-    const onVisible = () => {
-      if (!document.hidden) fetchProducts();
-    };
-    document.addEventListener("visibilitychange", onVisible);
-    return () => document.removeEventListener("visibilitychange", onVisible);
-  }, [fetchProducts]);
+    if (isError) toastError("Failed to load products");
+  }, [isError, toastError]);
 
   async function handleToggleStatus(product: Product) {
     try {
@@ -265,7 +228,7 @@ export default function ProductsPage() {
         product.isActive ? "Product deactivated" : "Product activated",
         product.name
       );
-      fetchProducts();
+      invalidateProducts();
     } catch {
       toastError("Failed to update product status");
     }
@@ -286,7 +249,7 @@ export default function ProductsPage() {
       success("Product deleted", deleteProduct.name);
       setDeleteProduct(null);
       if (products.length === 1 && page > 1) setPage((p) => p - 1);
-      else fetchProducts();
+      else invalidateProducts();
     } catch {
       toastError("Failed to delete product");
     } finally {
@@ -384,7 +347,7 @@ export default function ProductsPage() {
       </Card>
 
       {/* Content */}
-      {loading ? (
+      {isLoading ? (
         <div className="flex h-64 items-center justify-center">
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-[#e2e8f0] border-t-[#1E4D3D]" />
         </div>
@@ -773,7 +736,7 @@ export default function ProductsPage() {
           setEditProduct(null);
         }}
         onSuccess={() => {
-          fetchProducts();
+          invalidateProducts();
           success(
             editProduct ? "Product updated" : "Product added",
             editProduct?.name
