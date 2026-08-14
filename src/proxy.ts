@@ -1,7 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-const PUBLIC_PAGES = ["/login", "/forgot-password", "/register"];
+const PUBLIC_PAGES = ["/login", "/forgot-password", "/register", "/customer"];
 const PUBLIC_API = ["/api/auth"];
 const ADMIN_ONLY = [
   "/dashboard/employees",
@@ -12,7 +12,7 @@ const ADMIN_ONLY = [
 
 const STATIC_ASSET_RE = /\.(svg|png|jpe?g|gif|webp|ico|css|js|map|woff2?|ttf)$/i;
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   const isApiRoute = pathname.startsWith("/api/");
