@@ -34,6 +34,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "A valid product serial number is required" }, { status: 400 });
   }
 
+  let letterCode: string | undefined;
+  if (body.letterCode !== undefined && body.letterCode !== null && body.letterCode !== "") {
+    const candidate = String(body.letterCode).trim().toUpperCase();
+    if (!/^[A-Z]$/.test(candidate)) {
+      return NextResponse.json({ error: "Letter code must be a single letter (A-Z)" }, { status: 400 });
+    }
+    letterCode = candidate;
+  }
+
   const count = await prisma.giftItem.count();
   if (count >= MAX_GIFT_ITEMS) {
     return NextResponse.json({ error: `Only ${MAX_GIFT_ITEMS} gift items are allowed in the pool. Remove one before adding another.` }, { status: 400 });
@@ -49,8 +58,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "This product is already in the gift pool" }, { status: 409 });
   }
 
+  if (letterCode) {
+    const letterTaken = await prisma.giftItem.findUnique({ where: { letterCode } });
+    if (letterTaken) {
+      return NextResponse.json({ error: `Letter code "${letterCode}" is already used by another gift item` }, { status: 409 });
+    }
+  }
+
   const giftItem = await prisma.giftItem.create({
-    data: { productId: product.id },
+    data: { productId: product.id, letterCode },
     include: {
       product: {
         select: { id: true, name: true, sku: true, serialNumber: true, imageUrl: true, price: true, stock: true, isActive: true },

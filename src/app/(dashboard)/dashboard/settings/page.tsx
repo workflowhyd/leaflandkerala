@@ -58,6 +58,7 @@ interface CommissionSetting {
 
 interface GiftItem {
   id: string;
+  letterCode?: string | null;
   product: {
     id: string;
     name: string;
@@ -181,6 +182,7 @@ export default function SettingsPage() {
   const [giftItems, setGiftItems] = useState<GiftItem[]>([]);
   const [giftItemsLoading, setGiftItemsLoading] = useState(false);
   const [newGiftSerial, setNewGiftSerial] = useState("");
+  const [newGiftLetter, setNewGiftLetter] = useState("");
   const [addingGiftItem, setAddingGiftItem] = useState(false);
   const [giftItemError, setGiftItemError] = useState("");
   const [removingGiftItemId, setRemovingGiftItemId] = useState<string | null>(null);
@@ -253,7 +255,7 @@ export default function SettingsPage() {
       const res = await fetch("/api/admin/gift-items", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ serialNumber }),
+        body: JSON.stringify({ serialNumber, letterCode: newGiftLetter.trim() || undefined }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -261,6 +263,7 @@ export default function SettingsPage() {
         return;
       }
       setNewGiftSerial("");
+      setNewGiftLetter("");
       await fetchGiftItems();
     } catch {
       setGiftItemError("Network error. Please try again.");
@@ -622,7 +625,7 @@ export default function SettingsPage() {
                     <div className="border-t border-[#e2e8f0] pt-4">
                       <p className="text-sm font-semibold text-[#1a1a1a] mb-1">Gift Product Pool</p>
                       <p className="text-xs text-[#64748b] mb-3">
-                        Products the customer can choose from as their free gift (up to 5). Add by product serial number.
+                        Products the customer can choose from as their free gift (up to 5). Add by product serial number, with an optional single-letter code for easy reference.
                       </p>
 
                       <div className="flex items-end gap-2 mb-3">
@@ -636,6 +639,18 @@ export default function SettingsPage() {
                             placeholder="e.g. 42"
                             disabled={giftItems.length >= 5}
                             className="w-full rounded-md border border-[#e2e8f0] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3B7A57] disabled:opacity-50"
+                          />
+                        </div>
+                        <div className="flex flex-col gap-1.5 w-20">
+                          <label className="text-sm font-medium text-[#1a1a1a]">Letter</label>
+                          <input
+                            type="text"
+                            maxLength={1}
+                            value={newGiftLetter}
+                            onChange={(e) => setNewGiftLetter(e.target.value.replace(/[^a-zA-Z]/g, "").toUpperCase())}
+                            placeholder="A"
+                            disabled={giftItems.length >= 5}
+                            className="w-full rounded-md border border-[#e2e8f0] px-3 py-2 text-sm text-center focus:outline-none focus:ring-2 focus:ring-[#3B7A57] disabled:opacity-50"
                           />
                         </div>
                         <Button
@@ -663,6 +678,11 @@ export default function SettingsPage() {
                           {giftItems.map((g) => (
                             <div key={g.id} className="flex items-center justify-between gap-3 rounded-lg border border-[#e2e8f0] px-3 py-2">
                               <div className="flex items-center gap-3 min-w-0">
+                                {g.letterCode && (
+                                  <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-md bg-[#1E4D3D]/10 text-sm font-bold text-[#1E4D3D]">
+                                    {g.letterCode}
+                                  </div>
+                                )}
                                 {g.product.imageUrl ? (
                                   // eslint-disable-next-line @next/next/no-img-element
                                   <img src={g.product.imageUrl} alt={g.product.name} loading="lazy" decoding="async" className="h-10 w-10 rounded-md object-cover bg-gray-100 flex-shrink-0" />

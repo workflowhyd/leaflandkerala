@@ -71,6 +71,7 @@ enum ActivityType {
   ORDER_STATUS_CHANGE
   EMPLOYEE_CREATE
   EMPLOYEE_DELETE
+  EMPLOYEE_CREDENTIALS_UPDATE
   PRODUCT_CREATE
   PRODUCT_UPDATE
   RETURN_CREATE
@@ -413,10 +414,11 @@ model CommissionSetting {
 // Admin-curated pool of products customers can choose as a free gift
 // (up to 5 items) once their order qualifies via CommissionSetting's tiers.
 model GiftItem {
-  id        String   @id @default(cuid())
-  productId String   @unique
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
+  id         String   @id @default(cuid())
+  productId  String   @unique
+  letterCode String?  @unique
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
 
   product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
 

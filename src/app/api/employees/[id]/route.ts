@@ -44,10 +44,60 @@ export async function PATCH(
   const { id } = await params;
   const body = await request.json();
 
+  const supabaseAdmin = createSupabaseAdmin();
+
+  // Admin-initiated login credential change (email and/or password)
+  if (body.email !== undefined || body.password !== undefined) {
+    const current = await prisma.employee.findUnique({ where: { id } });
+    if (!current) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+    if (body.password !== undefined && body.password.length < 8) {
+      return NextResponse.json(
+        { error: "Password must be at least 8 characters" },
+        { status: 400 }
+      );
+    }
+
+    if (body.email !== undefined) {
+      const existing = await prisma.user.findUnique({ where: { email: body.email } });
+      if (existing && existing.id !== current.userId) {
+        return NextResponse.json({ error: "Email already in use" }, { status: 409 });
+      }
+    }
+
+    const authUpdate: { email?: string; password?: string } = {};
+    if (body.email !== undefined) authUpdate.email = body.email;
+    if (body.password !== undefined) authUpdate.password = body.password;
+
+    const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(
+      current.userId,
+      authUpdate
+    );
+    if (authError) {
+      return NextResponse.json(
+        { error: authError.message || "Failed to update credentials" },
+        { status: 500 }
+      );
+    }
+
+    if (body.email !== undefined) {
+      await prisma.user.update({ where: { id: current.userId }, data: { email: body.email } });
+    }
+
+    await prisma.activityLog.create({
+      data: {
+        userId: session.userId,
+        type: "EMPLOYEE_CREDENTIALS_UPDATE",
+        description: `Updated login credentials for employee: ${current.name}`,
+      },
+    });
+  }
+
   const employee = await prisma.employee.update({
     where: { id },
     data: {
       name: body.name,
+      email: body.email,
       mobile: body.mobile,
       address: body.address,
       territory: body.territory,
@@ -69,7 +119,6 @@ export async function PATCH(
     });
 
     // Sync active status in Supabase Auth
-    const supabaseAdmin = createSupabaseAdmin();
     await supabaseAdmin.auth.admin.updateUserById(employee.userId, {
       ban_duration: body.isActive ? "none" : "876600h", // ~100 years = effectively disabled
     });

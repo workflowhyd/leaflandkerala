@@ -29,6 +29,7 @@ import {
   AlertCircle,
   ExternalLink,
   Loader2,
+  Lock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
@@ -198,6 +199,10 @@ export default function EmployeeProfilePage() {
   const [editValue, setEditValue] = useState("");
   const [savingField, setSavingField] = useState(false);
 
+  // Login credentials state
+  const [newPassword, setNewPassword] = useState("");
+  const [savingPassword, setSavingPassword] = useState(false);
+
   // Timeline state
   const [timeline, setTimeline] = useState<TimelineEntry[]>([]);
   const [timelineLoading, setTimelineLoading] = useState(false);
@@ -306,9 +311,34 @@ export default function EmployeeProfilePage() {
       if (res.ok) {
         await fetchEmployee();
         setEditingField(null);
+      } else {
+        const err = await res.json().catch(() => ({}));
+        alert(err.error ?? "Failed to save");
       }
     } finally {
       setSavingField(false);
+    }
+  };
+
+  const handleSetPassword = async () => {
+    if (newPassword.length < 8) return;
+    if (!confirm("Change this employee's login password?")) return;
+    setSavingPassword(true);
+    try {
+      const res = await fetch(`/api/employees/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: newPassword }),
+      });
+      if (res.ok) {
+        setNewPassword("");
+        alert("Password updated successfully.");
+      } else {
+        const err = await res.json().catch(() => ({}));
+        alert(err.error ?? "Failed to update password");
+      }
+    } finally {
+      setSavingPassword(false);
     }
   };
 
@@ -608,13 +638,19 @@ export default function EmployeeProfilePage() {
                 onCancel={() => setEditingField(null)}
                 onEditValueChange={setEditValue}
               />
-              <div className="flex items-start gap-3">
-                <Mail className="h-4 w-4 mt-0.5 text-[#64748b]" />
-                <div>
-                  <p className="text-xs text-[#94a3b8] uppercase tracking-wide">Email</p>
-                  <p className="text-sm text-[#1a1a1a]">{employee.email}</p>
-                </div>
-              </div>
+              <EditableField
+                label="Email (Login)"
+                icon={<Mail className="h-4 w-4 text-[#64748b]" />}
+                value={employee.email}
+                fieldKey="email"
+                editingField={editingField}
+                editValue={editValue}
+                saving={savingField}
+                onEdit={handleStartEdit}
+                onSave={handleSaveField}
+                onCancel={() => setEditingField(null)}
+                onEditValueChange={setEditValue}
+              />
               <div className="flex items-start gap-3">
                 <Briefcase className="h-4 w-4 mt-0.5 text-[#64748b]" />
                 <div className="flex-1">
@@ -627,6 +663,39 @@ export default function EmployeeProfilePage() {
                     ₹{employee.monthlySales.toLocaleString("en-IN")} in monthly sales
                   </p>
                 </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Login Credentials */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Lock className="h-4 w-4 text-[#3B7A57]" />
+                Login Credentials
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-xs text-[#94a3b8] mb-3">
+                Set a new password for this employee. They&apos;ll use it with their email above to log in.
+              </p>
+              <div className="flex items-end gap-2">
+                <div className="flex-1">
+                  <Input
+                    type="password"
+                    label="New Password"
+                    placeholder="Min. 8 characters"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                  />
+                </div>
+                <Button
+                  onClick={handleSetPassword}
+                  loading={savingPassword}
+                  disabled={newPassword.length < 8}
+                >
+                  Set Password
+                </Button>
               </div>
             </CardContent>
           </Card>
