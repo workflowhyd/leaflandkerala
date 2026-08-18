@@ -2,6 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
+// Strips formatting (spaces, dashes, +91/91 country code) so the same phone
+// number typed differently doesn't slip past the duplicate check below.
+function normalizeMobile(raw: string): string {
+  const digits = raw.replace(/\D/g, "");
+  return digits.length > 10 ? digits.slice(-10) : digits;
+}
+
 export async function GET(request: NextRequest) {
   const session = await getSession();
   if (!session || session.role !== "EMPLOYEE") {
@@ -50,16 +57,22 @@ export async function POST(request: NextRequest) {
   if (!employee) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   const body = await request.json();
-  const { name, mobile, address, village, district, pincode, landmark, notes } = body;
+  const { name, address, village, district, pincode, landmark, notes } = body;
+  const mobile = normalizeMobile(body.mobile ?? "");
 
-  if (!name || !mobile || !address || !district || !pincode) {
+  if (!name || mobile.length !== 10 || !address || !district || !pincode) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
   }
 
-  // Check if customer exists with this mobile
-  const existing = await prisma.customer.findFirst({ where: { mobile, employeeId: employee.id } });
+  // Check across ALL employees, not just this one — a phone number belongs to
+  // one customer regardless of which agent registers them first.
+  const existing = await prisma.customer.findFirst({ where: { mobile } });
   if (existing) {
-    return NextResponse.json({ error: "Customer with this mobile already exists", customer: existing }, { status: 409 });
+    const ownedByCurrentAgent = existing.employeeId === employee.id;
+    const message = ownedByCurrentAgent
+      ? "You've already registered a customer with this mobile number"
+      : "A customer with this mobile number is already registered by another agent";
+    return NextResponse.json({ error: message, customer: existing, ownedByCurrentAgent }, { status: 409 });
   }
 
   const customer = await prisma.customer.create({

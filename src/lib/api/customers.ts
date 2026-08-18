@@ -28,6 +28,7 @@ export async function searchCustomers(query: string): Promise<CustomerSearchResu
 
 export interface CreateCustomerResult {
   customer?: CustomerSearchResult;
+  ownedByCurrentAgent?: boolean;
   [key: string]: unknown;
 }
 
@@ -40,6 +41,11 @@ export async function createCustomer(input: NewCustomerInput): Promise<CustomerS
   const data: CreateCustomerResult = await res.json().catch(() => ({}));
   if (!res.ok && res.status !== 409) {
     throw new Error((data as { error?: string }).error ?? "Failed to save customer");
+  }
+  // A 409 for a customer already owned by someone else isn't safe to silently
+  // reuse — this agent won't be able to place orders for them, so surface it.
+  if (res.status === 409 && !data.ownedByCurrentAgent) {
+    throw new Error((data as { error?: string }).error ?? "This customer is already registered by another agent");
   }
   return (data.customer ?? (data as unknown as CustomerSearchResult));
 }
